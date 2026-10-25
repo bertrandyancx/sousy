@@ -576,7 +576,7 @@ async function submitAuthScreen() {
     const result = signup
       ? await supabaseClient.auth.signUp({ email, password, options: { data: { username, display_name: username } } })
       : await supabaseClient.auth.signInWithPassword({ email, password });
-    if (result.error) { showToast(result.error.message); return; }
+    if (result.error) { showToast(friendlyAuthError(result.error)); return; }
     if (signup && !result.data.session) showToast('Check your email to confirm your account.');
     else { hideAuthScreen(); showToast(signup ? 'Your Sousy account is ready.' : 'Welcome back to Sousy.'); }
   } catch (error) {
@@ -601,6 +601,11 @@ function initializeAuthScreen() {
 }
 
 function hasRealAccount() { return Boolean(supabaseClient && authUser); }
+
+function friendlyAuthError(error) {
+  if (error?.code === '23505' || /duplicate|already exists|already registered/i.test(error?.message || '')) return 'That username or email is already in use.';
+  return error?.message || 'Please check your details and try again.';
+}
 
 async function loadAuthenticatedProfile(user) {
   authUser = user;
@@ -748,7 +753,7 @@ function initializeSocialInteractions() {
       const result = signup
         ? await supabaseClient.auth.signUp({ email, password, options: { data: { username, display_name: username } } })
         : await supabaseClient.auth.signInWithPassword({ email, password });
-      if (result.error) { showToast(result.error.message); return; }
+      if (result.error) { showToast(friendlyAuthError(result.error)); return; }
       $('account-panel').hidden = true;
       showToast(signup && !result.data.session ? 'Check your email to confirm your account.' : (signup ? 'Your Sousy account is ready.' : 'Welcome back to Sousy.'));
     } catch (error) {

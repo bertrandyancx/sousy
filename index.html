@@ -30,7 +30,7 @@
         <div class="auth-screen-tabs"><button class="auth-screen-tab active" data-auth-mode="signin">Sign in</button><button class="auth-screen-tab" data-auth-mode="signup">Create account</button></div>
         <button class="google-button" id="auth-google"><span>G</span> Continue with Google</button>
         <div class="or-divider"><span>or use email</span></div>
-        <label id="auth-username-field" hidden>Username<input id="auth-username" autocomplete="username" placeholder="Choose a username" /></label>
+        <label id="auth-username-field" hidden>Username<input id="auth-username" autocomplete="username" placeholder="Choose a username" /><small class="auth-field-hint">Friends will use this to find you.</small></label>
         <label>Email<input id="auth-email" type="email" autocomplete="email" placeholder="you@example.com" /></label>
         <label>Password<input id="auth-password" type="password" autocomplete="current-password" placeholder="At least 8 characters" /></label>
         <button class="primary-button" id="auth-submit">Sign in to Sousy <span>→</span></button>
@@ -113,7 +113,7 @@
             <div class="profile-edit-photo-wrap"><div class="profile-edit-avatar" id="profile-edit-avatar">B</div><label class="photo-upload-button">Change photo<input id="profile-page-photo" type="file" accept="image/*" /></label></div>
             <div class="profile-edit-fields">
               <label>Display name<input id="profile-display-name" placeholder="Your name" /></label>
-              <label>Username<input id="profile-username" placeholder="your_username" /></label>
+              <label>Username<input id="profile-username" placeholder="your_username" /><small class="auth-field-hint">This is how friends find you. You can change it anytime.</small></label>
               <label>Short intro<textarea id="profile-bio" rows="3" placeholder="Tell your cooking circle what you like to make."></textarea></label>
               <div class="profile-field-grid"><label>Location<input id="profile-location" placeholder="Optional" /></label><label>Cooking style<select id="profile-cooking-style"><option value="">Choose one</option><option>Cozy and comforting</option><option>Quick weeknight meals</option><option>Baking and sweets</option><option>Fresh and seasonal</option><option>Trying everything</option></select></label></div>
               <label class="profile-email-label">Account email<input id="profile-email" type="email" disabled /></label>
