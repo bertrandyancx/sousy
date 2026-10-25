@@ -63,6 +63,7 @@ let supabaseClient = null;
 let authUser = null;
 let authScreenMode = 'signin';
 let profileDraftPhoto = '';
+let onboardingShownThisSession = false;
 let voicePreferences = JSON.parse(localStorage.getItem('sous-easy-voice-preferences') || '{"accent":"auto","gender":"auto"}');
 
 function renderLists() {
@@ -281,7 +282,7 @@ function finishCooking() { $('progress-bar').style.width = '100%'; $('current-ta
 
 function pauseCooking() { if (window.speechSynthesis) window.speechSynthesis.pause(); showToast('Cooking paused. Say “ready” when you want to continue.'); }
 
-function setup() { renderLists(); $('open-setup').addEventListener('click', () => { $('setup-panel').hidden = false; $('setup-panel').scrollIntoView({behavior:'smooth'}); }); $('close-setup').addEventListener('click', () => $('setup-panel').hidden = true); $('analyze-plan').addEventListener('click', () => { $('analyze-plan').textContent = 'Plan updated ✓'; showToast('Your preferences are ready for the cooking plan.'); window.setTimeout(() => { $('analyze-plan').innerHTML = 'Update my plan <span>→</span>'; }, 2200); }); $('start-cooking').addEventListener('click', startCooking); $('back-to-prep').addEventListener('click', () => { $('cook-mode').hidden = true; $('dashboard').hidden = false; stopListening(); stopTimer(); if (wakeLock) wakeLock.release(); }); $('done-button').addEventListener('click', advanceTask); $('repeat-button').addEventListener('click', () => renderTask(true)); $('pause-button').addEventListener('click', pauseCooking); $('speak-button').addEventListener('click', () => renderTask(true)); $('timer-button').addEventListener('click', startTimer); $('dismiss-warning').addEventListener('click', hideWarning); $('issue-button').addEventListener('click', () => { showWarning('Tell me what changed', 'The plan is paused. You can say “the sauce is too thick,” “I’m missing an ingredient,” or tap Resume when ready.'); pauseCooking(); }); $('wake-button').addEventListener('click', requestWakeLock); $('sound-toggle').addEventListener('click', () => { voiceOn = !voiceOn; refreshSoundToggle(); if (!voiceOn) window.speechSynthesis?.cancel(); showToast(voiceOn ? 'Voice instructions on.' : 'Voice instructions muted.'); }); }
+function setup() { renderLists(); $('open-setup').addEventListener('click', () => { $('setup-panel').hidden = false; $('setup-panel').scrollIntoView({behavior:'smooth'}); }); $('close-setup').addEventListener('click', () => $('setup-panel').hidden = true); $('start-cooking').addEventListener('click', startCooking); $('back-to-prep').addEventListener('click', () => { $('cook-mode').hidden = true; $('dashboard').hidden = false; stopListening(); stopTimer(); if (wakeLock) wakeLock.release(); }); $('done-button').addEventListener('click', advanceTask); $('repeat-button').addEventListener('click', () => renderTask(true)); $('pause-button').addEventListener('click', pauseCooking); $('speak-button').addEventListener('click', () => renderTask(true)); $('timer-button').addEventListener('click', startTimer); $('dismiss-warning').addEventListener('click', hideWarning); $('issue-button').addEventListener('click', () => { showWarning('Tell me what changed', 'The plan is paused. You can say “the sauce is too thick,” “I’m missing an ingredient,” or tap Resume when ready.'); pauseCooking(); }); $('wake-button').addEventListener('click', requestWakeLock); $('sound-toggle').addEventListener('click', () => { voiceOn = !voiceOn; refreshSoundToggle(); if (!voiceOn) window.speechSynthesis?.cancel(); showToast(voiceOn ? 'Voice instructions on.' : 'Voice instructions muted.'); }); }
 
 setup();
 
@@ -564,8 +565,6 @@ function initializeSecondaryViews() {
 initializeSourceTabs();
 initializeSecondaryViews();
 $('back-to-prep').addEventListener('click', () => { cookingActive = false; });
-$('recipe-source').addEventListener('change', () => importRecipeFromUrl($('recipe-source').value));
-$('recipe-source').addEventListener('paste', () => window.setTimeout(() => importRecipeFromUrl($('recipe-source').value), 350));
 $('analyze-plan').addEventListener('click', updatePlanFromSource);
 
 function setProfile(name, handle) {
@@ -680,10 +679,14 @@ function continueAsGuest() {
 }
 
 function showOnboardingScreen(user) {
-  const key = `sous-easy-onboarding-complete-${user?.id || 'guest'}`;
+  if (!user || onboardingShownThisSession || user.user_metadata?.onboarding_complete) return;
+  const key = `sous-easy-onboarding-complete-${user.id}`;
   if (localStorage.getItem(key)) return;
+  onboardingShownThisSession = true;
   $('onboarding-screen').dataset.userKey = key;
   $('onboarding-screen').hidden = false;
+  localStorage.setItem(key, 'true');
+  supabaseClient.auth.updateUser({ data: { onboarding_complete: true } }).catch(() => {});
 }
 
 function hideOnboardingScreen() {
@@ -980,6 +983,7 @@ function initializeProfileMenu() {
         if (error) { showToast('Sign out failed. Please try again.'); return; }
       }
       authUser = null;
+      onboardingShownThisSession = false;
       hideOnboardingScreen();
       localStorage.removeItem('sous-easy-profile');
       localStorage.removeItem('sous-easy-profile-photo');
@@ -1120,15 +1124,21 @@ async function importRecipeFromUrl(url) {
   button.innerHTML = 'Reading recipe and rebuilding plan…';
   $('serving-status').textContent = 'Reading the original recipe…';
   try {
-    const response = await fetch('/api/import-recipe', { method:'POST', headers:{'Content-Type':'application/json'}, signal:importController.signal, body:JSON.stringify({ url:normalizedUrl, preferences:{ servings:$('servings').value, skill:$('skill')?.value || 'New to cooking', stove_scale:$('stove-scale')?.value || '1–10' } }) });
+    const response = await fetch('/api/import-recipe', { method:'POST', headers:{'Content-Type':'application/json'}, signal:importController.signal, body:JSON.stringify({ url:normalizedUrl, preferences:{ servings:$('servings').value, skill:$('skill')?.value || 'New to cooking', stove_scale:$('stove-scale')?.value || '1–10', modifications:$('modifications')?.value.trim() || '' } }) });
     const result = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(result.error || `Import failed (${response.status})`);
     if (requestId !== importRequestId) return;
     applyImportedRecipe(result, normalizedUrl);
   } catch (error) {
     if (error.name === 'AbortError' || requestId !== importRequestId) return;
-    $('serving-status').textContent = 'Import failed. Check the URL and make sure the Sous-easy server is running.';
-    showToast(`I could not import that recipe: ${error.message}`);
+    const details = error.message || 'Unknown import error';
+    const message = /PORTKEY_API_KEY|planner is not configured/i.test(details)
+      ? 'Recipe planning is not configured on this Render service. Add PORTKEY_API_KEY in Render → Environment.'
+      : /failed to fetch|network|server/i.test(details)
+        ? 'Sous-easy could not reach the recipe server. Check that the Render service is live and try again.'
+        : `Import failed: ${details}`;
+    $('serving-status').textContent = message;
+    showToast(message);
   } finally {
     if (requestId === importRequestId) button.innerHTML = originalLabel;
   }

@@ -87,6 +87,9 @@ class SousEasyHandler(SimpleHTTPRequestHandler):
             return
         if path == "/api/import-recipe":
             try:
+                if not os.environ.get("PORTKEY_API_KEY"):
+                    self._json(503, {"error": "Recipe planner is not configured: PORTKEY_API_KEY is missing"})
+                    return
                 size = int(self.headers.get("Content-Length", "0"))
                 request = json.loads(self.rfile.read(size) or "{}")
                 try:
