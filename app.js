@@ -623,7 +623,7 @@ function initializeProfileMenu() {
   });
   menu.addEventListener('click', (event) => event.stopPropagation());
   document.addEventListener('click', () => { menu.hidden = true; $('profile-button').setAttribute('aria-expanded', 'false'); });
-  document.querySelectorAll('[data-profile-action]').forEach((button) => button.addEventListener('click', () => {
+  document.querySelectorAll('[data-profile-action]').forEach((button) => button.addEventListener('click', async () => {
     const action = button.dataset.profileAction;
     menu.hidden = true;
     $('profile-button').setAttribute('aria-expanded', 'false');
@@ -631,11 +631,16 @@ function initializeProfileMenu() {
     else if (action === 'profile') showToast('Your profile is right here. Add a photo or open Account settings.');
     else if (action === 'help') showToast('Tell us what would make cooking easier.');
     else if (action === 'signout') {
-      if (supabaseClient) supabaseClient.auth.signOut();
+      if (supabaseClient) {
+        const { error } = await supabaseClient.auth.signOut();
+        if (error) { showToast('Sign out failed. Please try again.'); return; }
+      }
       authUser = null;
       localStorage.removeItem('sousy-profile');
       localStorage.removeItem('sousy-profile-photo');
       setProfile('Bertrand', '@homecook');
+      $('profile-menu').hidden = true;
+      $('profile-button').setAttribute('aria-expanded', 'false');
       showToast('Signed out.');
     }
   }));
