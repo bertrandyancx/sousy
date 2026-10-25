@@ -107,6 +107,23 @@
           <div class="friend-section"><div class="section-heading compact-heading"><div><p class="eyebrow">YOUR NETWORK</p><h3>Friend requests</h3></div></div><div id="friend-requests-list"><div class="request-row"><div class="friend-avatar avatar-eli">E</div><div class="friend-info"><strong>Eli Brooks</strong><p>@elibakes wants to follow you</p></div><button class="accept-button" data-accept="eli">Accept</button></div></div></div>
         </section>
 
+        <section class="content-view" id="profile-view" hidden>
+          <div class="view-heading"><div><p class="eyebrow">YOUR PROFILE</p><h2>Make it yours</h2><p>Give your cooking circle a little context about you.</p></div></div>
+          <div class="profile-edit-card paper-texture">
+            <div class="profile-edit-photo-wrap"><div class="profile-edit-avatar" id="profile-edit-avatar">B</div><label class="photo-upload-button">Change photo<input id="profile-page-photo" type="file" accept="image/*" /></label></div>
+            <div class="profile-edit-fields">
+              <label>Display name<input id="profile-display-name" placeholder="Your name" /></label>
+              <label>Username<input id="profile-username" placeholder="your_username" /></label>
+              <label>Short intro<textarea id="profile-bio" rows="3" placeholder="Tell your cooking circle what you like to make."></textarea></label>
+              <div class="profile-field-grid"><label>Location<input id="profile-location" placeholder="Optional" /></label><label>Cooking style<select id="profile-cooking-style"><option value="">Choose one</option><option>Cozy and comforting</option><option>Quick weeknight meals</option><option>Baking and sweets</option><option>Fresh and seasonal</option><option>Trying everything</option></select></label></div>
+              <label class="profile-email-label">Account email<input id="profile-email" type="email" disabled /></label>
+              <button class="primary-button" id="save-profile">Save profile <span>→</span></button>
+              <p class="profile-save-status" id="profile-save-status" role="status"></p>
+            </div>
+          </div>
+          <div class="profile-settings-links"><button class="settings-link">Privacy and visibility <span>→</span></button><button class="settings-link">Notifications <span>→</span></button><button class="settings-link">Change password <span>→</span></button></div>
+        </section>
+
         <section class="content-view" id="saved-view" hidden>
           <div class="view-heading"><div><p class="eyebrow">YOUR LITTLE LIBRARY</p><h2>Saved</h2><p>Keep inspiration close, and find recipes you’ve already cooked.</p></div><span class="saved-count" id="saved-count">0 saved</span></div>
           <div class="sub-tabs" role="tablist"><button class="sub-tab active" data-saved-tab="inspirations">Inspirations</button><button class="sub-tab" data-saved-tab="new-recipes">New Recipes</button><button class="sub-tab" data-saved-tab="past">Past recipes</button></div>

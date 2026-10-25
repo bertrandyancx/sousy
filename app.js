@@ -62,6 +62,7 @@ let importController = null;
 let supabaseClient = null;
 let authUser = null;
 let authScreenMode = 'signin';
+let profileDraftPhoto = '';
 
 function renderLists() {
   $('ingredient-list').innerHTML = ingredients.length ? ingredients.map((item, index) => `<li><label class="check-item"><input type="checkbox" class="station-check" data-station="ingredient-${index}" /><span>${item}</span></label></li>`).join('') : '<li class="empty-list">Import a recipe to see ingredients.</li>';
@@ -465,6 +466,67 @@ function setProfile(name, handle) {
   localStorage.setItem('sousy-profile', JSON.stringify({ name, handle }));
 }
 
+function populateProfileForm(profile = {}, user = authUser) {
+  if (!$('profile-display-name')) return;
+  const metadata = user?.user_metadata || {};
+  $('profile-display-name').value = profile.display_name || metadata.display_name || metadata.full_name || user?.email?.split('@')[0] || '';
+  $('profile-username').value = profile.username || metadata.username || '';
+  $('profile-bio').value = profile.bio || '';
+  $('profile-location').value = profile.location || '';
+  $('profile-cooking-style').value = profile.cooking_style || '';
+  $('profile-email').value = user?.email || '';
+  profileDraftPhoto = profile.avatar_url || '';
+  const avatar = $('profile-edit-avatar');
+  if (avatar) avatar.innerHTML = profileDraftPhoto ? `<img src="${profileDraftPhoto}" alt="Your profile photo" />` : escapeInstructionHtml(($('profile-display-name').value || 'B').charAt(0).toUpperCase());
+}
+
+async function saveProfileChanges() {
+  if (!hasRealAccount()) { showToast('Sign in to edit your profile.'); return; }
+  const displayName = $('profile-display-name').value.trim();
+  const username = $('profile-username').value.trim();
+  if (!displayName || !/^[A-Za-z0-9_]{3,30}$/.test(username)) { showToast('Add a display name and a valid username.'); return; }
+  const button = $('save-profile');
+  const status = $('profile-save-status');
+  button.disabled = true;
+  button.textContent = 'Saving…';
+  try {
+    const { data, error } = await supabaseClient.from('profiles').update({
+      display_name: displayName,
+      username,
+      bio: $('profile-bio').value.trim(),
+      location: $('profile-location').value.trim(),
+      cooking_style: $('profile-cooking-style').value,
+      avatar_url: profileDraftPhoto || null,
+    }).eq('id', authUser.id).select('username,display_name,avatar_url,bio,location,cooking_style').single();
+    if (error) throw error;
+    setProfile(data.display_name, `@${data.username}`);
+    if (data.avatar_url) applyProfilePhoto(data.avatar_url);
+    status.textContent = 'Profile saved.';
+    showToast('Your profile is up to date.');
+  } catch (error) {
+    status.textContent = error.message || 'Profile could not be saved.';
+    showToast('Profile could not be saved.');
+  } finally {
+    button.disabled = false;
+    button.innerHTML = 'Save profile <span>→</span>';
+  }
+}
+
+function initializeProfileEditor() {
+  $('profile-page-photo').addEventListener('change', (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
+    if (file.size > 2 * 1024 * 1024) { showToast('Choose a photo under 2 MB.'); return; }
+    const reader = new FileReader();
+    reader.onload = () => {
+      profileDraftPhoto = reader.result;
+      $('profile-edit-avatar').innerHTML = `<img src="${profileDraftPhoto}" alt="Your profile photo" />`;
+    };
+    reader.readAsDataURL(file);
+  });
+  $('save-profile').addEventListener('click', saveProfileChanges);
+}
+
 function setAuthScreenMode(mode) {
   authScreenMode = mode;
   const signup = mode === 'signup';
@@ -529,12 +591,13 @@ function hasRealAccount() { return Boolean(supabaseClient && authUser); }
 
 async function loadAuthenticatedProfile(user) {
   authUser = user;
-  const { data } = await supabaseClient.from('profiles').select('username,display_name,avatar_url').eq('id', user.id).maybeSingle();
+  const { data } = await supabaseClient.from('profiles').select('username,display_name,avatar_url,bio,location,cooking_style').eq('id', user.id).maybeSingle();
   const metadata = user.user_metadata || {};
   const displayName = data?.display_name || metadata.display_name || metadata.full_name || user.email?.split('@')[0] || 'Sousy cook';
   const username = data?.username || metadata.username || `cook_${user.id.slice(0, 8)}`;
   setProfile(displayName, `@${username.replace(/^@/, '')}`);
   if (data?.avatar_url) applyProfilePhoto(data.avatar_url);
+  populateProfileForm(data || {}, user);
   hideAuthScreen();
   await loadFriendRequests();
 }
@@ -700,7 +763,7 @@ function initializeProfileMenu() {
     menu.hidden = true;
     $('profile-button').setAttribute('aria-expanded', 'false');
     if (action === 'settings' || action === 'saved' || action === 'friends') showView(action);
-    else if (action === 'profile') showToast('Your profile is right here. Add a photo or open Account settings.');
+    else if (action === 'profile') { showView('profile'); populateProfileForm({}, authUser); }
     else if (action === 'help') showToast('Tell us what would make cooking easier.');
     else if (action === 'signout') {
       if (supabaseClient) {
@@ -731,9 +794,11 @@ function initializeProfileMenu() {
 function applyProfilePhoto(source) {
   $('menu-avatar').innerHTML = `<img src="${source}" alt="Your profile photo" />`;
   $('profile-button').innerHTML = `<img src="${source}" alt="Open your profile" />`;
+  if ($('profile-edit-avatar')) $('profile-edit-avatar').innerHTML = `<img src="${source}" alt="Your profile photo" />`;
 }
 
 initializeProfileMenu();
+initializeProfileEditor();
 $('close-mic-warning').addEventListener('click', () => { $('mic-warning').hidden = true; showToast('Manual mode on — tap “I’m done” after every action.'); });
 initializeAuthScreen();
 showAuthScreen();
