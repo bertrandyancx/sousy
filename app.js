@@ -423,15 +423,15 @@ function initializeSourceTabs() {
     const file = event.target.files[0];
     $('photo-name').textContent = file ? `${file.name} ready to analyze.` : 'Take a photo or choose an image of the recipe.';
     if (!file) return;
+    if (file.size > 8 * 1024 * 1024) {
+      $('photo-name').textContent = 'Choose an image under 8 MB.';
+      showToast('Choose an image under 8 MB.');
+      return;
+    }
     $('serving-status').textContent = 'Reading serving size from the original picture…';
     const nameMatch = parseServingSize(file.name);
     if (nameMatch) applyParsedServingSize(nameMatch, 'Picture filename');
-    else {
-      $('serving-status').textContent = 'Reading serving size from the original picture…';
-      const reader = new FileReader();
-      reader.onload = () => requestParsedServing('photo', reader.result, 'recipe picture');
-      reader.readAsDataURL(file);
-    }
+    else $('serving-status').textContent = 'Serving size will be read when the picture is analyzed.';
   });
   parseServingSource($('recipe-source').value, 'Original recipe');
 }
@@ -1029,9 +1029,7 @@ async function updatePlanFromSource() {
   if (activeSourceType === 'photo') {
     const file = $('recipe-photo').files[0];
     if (!file) { showToast('Choose a recipe picture first.'); return; }
-    const reader = new FileReader();
-    reader.onload = () => importImageRecipe(reader.result, file.name);
-    reader.readAsDataURL(file);
+    await importImageRecipe(file);
     return;
   }
   const source = $('recipe-source').value.trim();
@@ -1044,6 +1042,28 @@ function readFileAsDataUrl(file) {
     const reader = new FileReader();
     reader.onload = () => resolve(reader.result);
     reader.onerror = () => reject(new Error('The PDF could not be read on this device.'));
+    reader.readAsDataURL(file);
+  });
+}
+
+function readImageAsJpegDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error('The picture could not be read on this device.'));
+    reader.onload = () => {
+      const image = new Image();
+      image.onerror = () => reject(new Error('This picture format is not readable. Try a JPG or PNG image.'));
+      image.onload = () => {
+        const maxDimension = 1800;
+        const scale = Math.min(1, maxDimension / Math.max(image.naturalWidth, image.naturalHeight));
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.max(1, Math.round(image.naturalWidth * scale));
+        canvas.height = Math.max(1, Math.round(image.naturalHeight * scale));
+        canvas.getContext('2d').drawImage(image, 0, 0, canvas.width, canvas.height);
+        resolve(canvas.toDataURL('image/jpeg', 0.88));
+      };
+      image.src = reader.result;
+    };
     reader.readAsDataURL(file);
   });
 }
@@ -1097,16 +1117,23 @@ async function importTextRecipe(text, title, source) {
   finally { button.innerHTML = originalLabel; }
 }
 
-async function importImageRecipe(image, title) {
+async function importImageRecipe(file) {
   const button = $('analyze-plan');
   const originalLabel = button.innerHTML;
-  button.innerHTML = 'Reading picture and rebuilding plan…';
+  button.innerHTML = 'Preparing picture and rebuilding plan…';
+  $('serving-status').textContent = 'Reading the recipe from the picture…';
   try {
-    const response = await fetch('/api/analyze-image', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ image, preferences:{ servings:$('servings').value, skill:$('skill')?.value || 'New to cooking', stove_scale:$('stove-scale')?.value || '1–10' } }) });
-    if (!response.ok) throw new Error('Image analysis failed');
-    const result = await response.json();
-    applyImportedRecipe({ recipe:{ title, source:'Uploaded picture', servings:result.plan?.servings || null, total_time:null }, plan:result.plan }, title);
-  } catch (error) { showToast('I could not read that picture. Try a clearer image.'); }
+    const imageData = await readImageAsJpegDataUrl(file);
+    const response = await fetch('/api/analyze-image', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ image:imageData, preferences:{ servings:$('servings').value, skill:$('skill')?.value || 'New to cooking', stove_scale:$('stove-scale')?.value || '1–10', modifications:$('modifications')?.value.trim() || '' } }) });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(result.error || `Image analysis failed (${response.status})`);
+    const title = file.name.replace(/\.[^.]+$/, '') || 'Uploaded picture';
+    applyImportedRecipe({ recipe:{ title, source:'Uploaded picture', servings:result.plan?.servings || null, total_time:null }, plan:result.plan }, file.name);
+  } catch (error) {
+    const message = plannerErrorMessage(error, 'I could not read that picture. Try a clearer JPG or PNG image.');
+    $('serving-status').textContent = message;
+    showToast(message);
+  }
   finally { button.innerHTML = originalLabel; }
 }
 
