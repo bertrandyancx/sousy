@@ -59,6 +59,8 @@ let manualMode = false;
 let speechStartHandle = null;
 let importRequestId = 0;
 let importController = null;
+let supabaseClient = null;
+let authUser = null;
 
 function renderLists() {
   $('ingredient-list').innerHTML = ingredients.length ? ingredients.map((item, index) => `<li><label class="check-item"><input type="checkbox" class="station-check" data-station="ingredient-${index}" /><span>${item}</span></label></li>`).join('') : '<li class="empty-list">Import a recipe to see ingredients.</li>';
@@ -462,6 +464,98 @@ function setProfile(name, handle) {
   localStorage.setItem('sousy-profile', JSON.stringify({ name, handle }));
 }
 
+function hasRealAccount() { return Boolean(supabaseClient && authUser); }
+
+async function loadAuthenticatedProfile(user) {
+  authUser = user;
+  const { data } = await supabaseClient.from('profiles').select('username,display_name,avatar_url').eq('id', user.id).maybeSingle();
+  const metadata = user.user_metadata || {};
+  const displayName = data?.display_name || metadata.display_name || metadata.full_name || user.email?.split('@')[0] || 'Sousy cook';
+  const username = data?.username || metadata.username || `cook_${user.id.slice(0, 8)}`;
+  setProfile(displayName, `@${username.replace(/^@/, '')}`);
+  if (data?.avatar_url) applyProfilePhoto(data.avatar_url);
+  await loadFriendRequests();
+}
+
+function renderRealFriendRows(profiles) {
+  const list = $('friend-list');
+  if (!profiles.length) {
+    list.innerHTML = '<p class="feed-note">No cooks found. Try another username.</p>';
+    return;
+  }
+  list.innerHTML = profiles.map((profile) => {
+    const name = profile.display_name || profile.username;
+    const initial = escapeInstructionHtml(name.charAt(0).toUpperCase());
+    return `<article class="friend-row"><div class="friend-avatar">${initial}</div><div class="friend-info"><strong>${escapeInstructionHtml(name)}</strong><p>@${escapeInstructionHtml(profile.username)}</p></div><button class="follow-button" data-real-friend-id="${profile.id}">Add friend</button></article>`;
+  }).join('');
+  list.querySelectorAll('[data-real-friend-id]').forEach((button) => button.addEventListener('click', () => sendFriendRequest(button.dataset.realFriendId, button)));
+}
+
+async function searchRealFriends(query) {
+  const safeQuery = query.replace(/[%_]/g, '');
+  let request = supabaseClient.from('profiles').select('id,username,display_name,avatar_url').neq('id', authUser.id).order('username').limit(20);
+  if (safeQuery) request = request.or(`username.ilike.%${safeQuery}%,display_name.ilike.%${safeQuery}%`);
+  const { data, error } = await request;
+  if (error) { showToast('I could not search cooks right now.'); return; }
+  renderRealFriendRows(data || []);
+  showToast(data?.length ? `${data.length} cook${data.length === 1 ? '' : 's'} found.` : 'No cooks found yet.');
+}
+
+async function sendFriendRequest(receiverId, button) {
+  button.disabled = true;
+  const { error } = await supabaseClient.from('friend_requests').insert({ sender_id: authUser.id, receiver_id: receiverId });
+  if (error) {
+    button.disabled = false;
+    showToast(error.code === '23505' ? 'A request already exists.' : 'I could not send that request.');
+    return;
+  }
+  button.textContent = 'Requested';
+  showToast('Friend request sent.');
+}
+
+async function loadFriendRequests() {
+  const container = $('friend-requests-list');
+  if (!container || !hasRealAccount()) return;
+  const { data: requests } = await supabaseClient.from('friend_requests').select('id,sender_id,status').eq('receiver_id', authUser.id).eq('status', 'pending').order('created_at', { ascending: false });
+  const senderIds = (requests || []).map((request) => request.sender_id);
+  let profiles = [];
+  if (senderIds.length) {
+    const result = await supabaseClient.from('profiles').select('id,username,display_name').in('id', senderIds);
+    profiles = result.data || [];
+  }
+  const profileMap = new Map(profiles.map((profile) => [profile.id, profile]));
+  container.innerHTML = requests?.length ? requests.map((request) => {
+    const profile = profileMap.get(request.sender_id) || { username: 'cook', display_name: 'Sousy cook' };
+    return `<div class="request-row"><div class="friend-avatar">${escapeInstructionHtml(profile.display_name.charAt(0).toUpperCase())}</div><div class="friend-info"><strong>${escapeInstructionHtml(profile.display_name)}</strong><p>@${escapeInstructionHtml(profile.username)} wants to follow you</p></div><button class="accept-button" data-accept-request="${request.id}">Accept</button></div>`;
+  }).join('') : '<p class="feed-note">No pending friend requests.</p>';
+  container.querySelectorAll('[data-accept-request]').forEach((button) => button.addEventListener('click', () => acceptFriendRequest(button.dataset.acceptRequest, button)));
+}
+
+async function acceptFriendRequest(requestId, button) {
+  const { error } = await supabaseClient.from('friend_requests').update({ status: 'accepted' }).eq('id', requestId).eq('receiver_id', authUser.id);
+  if (error) { showToast('I could not accept that request.'); return; }
+  button.textContent = 'Accepted';
+  button.disabled = true;
+  showToast('Friend request accepted.');
+}
+
+async function initializeSupabase() {
+  if (!window.supabase?.createClient) return;
+  try {
+    const response = await fetch('/api/config');
+    const config = await response.json();
+    if (!config.supabase_url || !config.supabase_anon_key) return;
+    supabaseClient = window.supabase.createClient(config.supabase_url, config.supabase_anon_key);
+    const { data } = await supabaseClient.auth.getSession();
+    if (data.session?.user) await loadAuthenticatedProfile(data.session.user);
+    supabaseClient.auth.onAuthStateChange((_event, session) => {
+      window.setTimeout(() => session?.user ? loadAuthenticatedProfile(session.user) : (authUser = null), 0);
+    });
+  } catch (error) {
+    console.warn('Supabase is not configured yet.');
+  }
+}
+
 function initializeSocialInteractions() {
   document.querySelectorAll('[data-recipe-tab]').forEach((tab) => tab.addEventListener('click', () => {
     document.querySelectorAll('[data-recipe-tab]').forEach((item) => item.classList.toggle('active', item === tab));
@@ -477,8 +571,9 @@ function initializeSocialInteractions() {
     showToast(isFollowing ? 'Added to your cooking circle.' : 'Removed from your cooking circle.');
   }));
   document.querySelectorAll('[data-accept]').forEach((button) => button.addEventListener('click', () => { button.classList.add('accepted'); button.textContent = 'Accepted'; showToast('Friend request accepted.'); }));
-  $('find-friend-button').addEventListener('click', () => {
+  $('find-friend-button').addEventListener('click', async () => {
     const query = $('friend-search-input').value.trim().toLowerCase();
+    if (hasRealAccount()) { await searchRealFriends(query); return; }
     const rows = [...document.querySelectorAll('#friend-list .friend-row')];
     let matches = 0;
     rows.forEach((row) => { const visible = !query || row.textContent.toLowerCase().includes(query); row.hidden = !visible; if (visible) matches += 1; });
@@ -495,16 +590,25 @@ function initializeSocialInteractions() {
     $('account-username').parentElement.hidden = !signup;
     $('account-submit').innerHTML = signup ? 'Create my Sousy account <span>→</span>' : 'Sign in to Sousy <span>→</span>';
   }));
-  $('google-signin').addEventListener('click', () => { setProfile('Google cook', '@googlecook'); $('account-panel').hidden = true; showToast('Signed in with Google.'); });
-  $('account-submit').addEventListener('click', () => {
+  $('google-signin').addEventListener('click', async () => {
+    if (!supabaseClient) { showToast('Supabase accounts are not configured yet.'); return; }
+    const { error } = await supabaseClient.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: window.location.origin } });
+    if (error) showToast(error.message);
+  });
+  $('account-submit').addEventListener('click', async () => {
     const signup = document.querySelector('[data-account-tab].active').dataset.accountTab === 'signup';
     const email = $('account-email').value.trim();
     const username = $('account-username').value.trim();
     const password = $('account-password').value;
+    if (!supabaseClient) { showToast('Supabase accounts are not configured yet.'); return; }
     if (!email || !email.includes('@') || !password || (signup && !username)) { showToast(signup ? 'Add an email, username, and password.' : 'Add your email and password.'); return; }
-    setProfile(signup ? username : email.split('@')[0], signup ? `@${username.toLowerCase().replace(/\s+/g, '')}` : 'Signed in with email');
+    if (signup && !/^[A-Za-z0-9_]{3,30}$/.test(username)) { showToast('Username must be 3–30 letters, numbers, or underscores.'); return; }
+    const result = signup
+      ? await supabaseClient.auth.signUp({ email, password, options: { data: { username, display_name: username } } })
+      : await supabaseClient.auth.signInWithPassword({ email, password });
+    if (result.error) { showToast(result.error.message); return; }
     $('account-panel').hidden = true;
-    showToast(signup ? 'Your Sousy account is ready.' : 'Welcome back to Sousy.');
+    showToast(signup && !result.data.session ? 'Check your email to confirm your account.' : (signup ? 'Your Sousy account is ready.' : 'Welcome back to Sousy.'));
   });
 }
 
@@ -526,7 +630,14 @@ function initializeProfileMenu() {
     if (action === 'settings' || action === 'saved' || action === 'friends') showView(action);
     else if (action === 'profile') showToast('Your profile is right here. Add a photo or open Account settings.');
     else if (action === 'help') showToast('Tell us what would make cooking easier.');
-    else if (action === 'signout') { localStorage.removeItem('sousy-profile'); localStorage.removeItem('sousy-profile-photo'); setProfile('Bertrand', '@homecook'); showToast('Signed out on this device.'); }
+    else if (action === 'signout') {
+      if (supabaseClient) supabaseClient.auth.signOut();
+      authUser = null;
+      localStorage.removeItem('sousy-profile');
+      localStorage.removeItem('sousy-profile-photo');
+      setProfile('Bertrand', '@homecook');
+      showToast('Signed out.');
+    }
   }));
   $('profile-photo').addEventListener('change', (event) => {
     const file = event.target.files[0];
@@ -546,6 +657,7 @@ function applyProfilePhoto(source) {
 
 initializeProfileMenu();
 $('close-mic-warning').addEventListener('click', () => { $('mic-warning').hidden = true; showToast('Manual mode on — tap “I’m done” after every action.'); });
+initializeSupabase();
 
 async function updatePlanFromSource() {
   if (activeSourceType === 'pdf') {

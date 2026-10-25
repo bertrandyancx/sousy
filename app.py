@@ -57,8 +57,17 @@ class SousyHandler(SimpleHTTPRequestHandler):
         self.wfile.write(body)
 
     def do_GET(self):  # noqa: N802
-        if urlparse(self.path).path == "/api/health":
+        path = urlparse(self.path).path
+        if path == "/api/health":
             self._json(200, {"ok": True, "model": "gpt-6-luna"})
+            return
+        if path == "/api/config":
+            # These are public browser configuration values. Never expose the
+            # Portkey key or a Supabase service-role key here.
+            self._json(200, {
+                "supabase_url": os.environ.get("SUPABASE_URL", ""),
+                "supabase_anon_key": os.environ.get("SUPABASE_ANON_KEY", ""),
+            })
             return
         super().do_GET()
 
