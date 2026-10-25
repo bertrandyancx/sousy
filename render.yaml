@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: sousy
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: python app.py
+    healthCheckPath: /api/health
+    envVars:
+      - key: PORTKEY_API_KEY
+        sync: false

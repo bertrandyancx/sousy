@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#f7f1e7" />
+    <title>Sousy — Cooking companion</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="styles.css" />
+    <link rel="stylesheet" href="view-styles.css" />
+    <link rel="stylesheet" href="social-styles.css" />
+    <link rel="stylesheet" href="profile-styles.css" />
+    <link rel="stylesheet" href="profile-avatar.css" />
+    <link rel="stylesheet" href="instruction-styles.css" />
+    <link rel="stylesheet" href="progress-styles.css" />
+    <link rel="stylesheet" href="checklist-styles.css" />
+    <link rel="stylesheet" href="preview-styles.css" />
+    <link rel="stylesheet" href="shopping-styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="topbar">
+        <div class="brand-lockup"><span class="brand-mark">✿</span><span>Sousy</span></div>
+        <div class="top-actions"><button class="icon-button" id="sound-toggle" aria-label="Toggle sound">⌁</button><span class="live-dot" id="listen-status" title="Listening status"></span><button class="avatar" id="profile-button" aria-label="Open your profile" aria-expanded="false">B</button><div class="profile-menu" id="profile-menu" hidden><div class="profile-menu-head"><label class="menu-photo" title="Add a profile photo"><span id="menu-avatar">B</span><input id="profile-photo" type="file" accept="image/*" /></label><div><strong id="menu-profile-name">Bertrand</strong><p id="menu-profile-handle">@homecook</p></div></div><button class="profile-menu-link" data-profile-action="profile"><span>◉</span> View profile <b>→</b></button><button class="profile-menu-link" data-profile-action="settings"><span>⚙</span> Account settings <b>→</b></button><button class="profile-menu-link" data-profile-action="saved"><span>♡</span> Saved recipes <b>→</b></button><button class="profile-menu-link" data-profile-action="friends"><span>♧</span> Find friends <b>→</b></button><div class="profile-menu-divider"></div><button class="profile-menu-link" data-profile-action="help"><span>?</span> Help and feedback <b>→</b></button><button class="profile-menu-link sign-out-link" data-profile-action="signout"><span>↪</span> Sign out</button></div></div>
+      </header>
+
+      <main>
+        <section class="welcome-row home-only">
+          <div><p class="eyebrow">YOUR KITCHEN COMPANION</p><h1>Good cooking,<br /><em>no thinking.</em><span class="sousy-tagline"> It’s Sousy.</span></h1></div>
+          <div class="sprig" aria-hidden="true">✦</div>
+        </section>
+
+        <section class="recipe-card paper-texture home-only">
+          <div class="recipe-image" aria-label="Illustration of a bowl of pasta"><span>🍝</span></div>
+          <div class="recipe-copy"><p class="eyebrow">READY TO COOK</p><h2 id="recipe-title">No recipe loaded yet</h2><p class="source" id="recipe-source-label">Import a URL, PDF, or picture to begin.</p><div class="recipe-meta"><span id="recipe-time">◷ —</span><span>♨ your kitchen</span></div></div>
+          <button class="edit-recipe" id="open-setup">Upload <span>→</span></button>
+        </section>
+
+        <section class="setup-panel home-only" id="setup-panel" hidden>
+          <div class="panel-heading"><div><p class="eyebrow">MAKE IT YOURS</p><h2>Before we start</h2></div><button class="close-button" id="close-setup" aria-label="Close setup">×</button></div>
+          <div class="source-tabs" role="tablist" aria-label="Recipe source type"><button class="source-tab active" data-source-type="url" role="tab">URL</button><button class="source-tab" data-source-type="pdf" role="tab">PDF</button><button class="source-tab" data-source-type="photo" role="tab">Picture</button></div>
+          <div class="source-panel" id="source-url-panel"><label>Recipe URL<input id="recipe-source" placeholder="Paste a recipe URL" /></label><p class="field-hint">We’ll read the recipe title and show its source beside it.</p></div>
+          <div class="source-panel" id="source-pdf-panel" hidden><label>Recipe PDF<input id="recipe-pdf" type="file" accept="application/pdf" /></label><p class="field-hint" id="pdf-name">Choose a PDF to extract the recipe from.</p></div>
+          <div class="source-panel" id="source-photo-panel" hidden><label>Recipe picture<input id="recipe-photo" type="file" accept="image/*" capture="environment" /></label><p class="field-hint" id="photo-name">Take a photo or choose an image of the recipe.</p></div>
+          <label>Servings<input id="servings" type="number" min="1" placeholder="Parsed from the recipe" /><p class="field-hint" id="serving-status">Serving size will be parsed after you import a recipe.</p></label>
+          <label>Anything missing or different?<textarea id="modifications" rows="2" placeholder="Example: I do not have parmesan. Leave blank if everything is ready."></textarea></label>
+          <div class="setup-note"><span>✦</span><p>We’ll only suggest a substitute if you tell us something is missing. Your plan will adjust around it.</p></div>
+          <button class="primary-button" id="analyze-plan">Import recipe and update plan <span>→</span></button>
+        </section>
+
+        <section class="dashboard home-only" id="dashboard">
+          <div class="section-heading"><div><p class="eyebrow">YOUR STATION</p><h2>What we’ll use</h2><p class="station-preview-note">Preview only — wait for “I’m ready.” Sousy will tell you when to touch each item.</p></div><span class="progress-pill" id="progress-pill">0 / 0</span></div>
+          <div class="checklist-grid">
+            <div class="list-card"><div class="list-card-head"><span class="card-icon ingredient-icon">✿</span><div><h3>Ingredients</h3><p>Preview in first-use order</p></div></div><ul id="ingredient-list"></ul></div>
+            <div class="list-card"><div class="list-card-head"><span class="card-icon equipment-icon">⌁</span><div><h3>Equipment</h3><p>Preview in first-use order</p></div></div><ul id="equipment-list"></ul></div>
+          </div>
+          <div class="overview-card"><div class="overview-heading"><div><p class="eyebrow">THE BIG PICTURE</p><h3>Your cooking plan</h3></div><span id="overview-stage-count">0 stages</span></div><div class="action-count"><strong id="action-count">0 detailed actions</strong><span>Each action waits for your confirmation.</span></div><ol class="overview-list" id="overview-list"></ol></div>
+          <div class="warning-banner"><span class="warning-icon">!</span><div><strong>Safety note</strong><p>Keep a clean cutting board and knife for foods that won’t touch raw meat. Hot pan and steam warnings will appear here as you cook.</p></div></div>
+          <button class="primary-button large-button" id="start-cooking">I’m ready — take me through it <span>→</span></button>
+        </section>
+
+        <section class="cook-mode" id="cook-mode" hidden>
+          <div class="cook-header"><button class="back-button" id="back-to-prep">← <span>Prep</span></button><div class="cook-header-status"><div class="instruction-counter" id="instruction-counter">1 / 40</div><div class="listening-chip"><span class="live-dot"></span><span id="listening-label">Listening</span></div></div><button class="icon-button" id="wake-button" title="Keep screen awake">◒</button></div>
+          <div class="cook-progress"><div class="progress-track"><span id="progress-bar"></span></div><div><span id="step-count">Step 1 of 40</span><span id="remaining-time">about 30 min left</span></div></div>
+          <div class="lyrics-window" id="lyrics-window"><div class="lyrics-fade"></div><div class="lyrics-list" id="lyrics-list"></div></div>
+          <article class="current-task paper-texture"><div class="task-topline"><span class="step-tag" id="task-tag">NEXT UP</span><span class="task-duration" id="task-duration">5 min</span></div><div class="instruction-key"><span class="key-equipment">Equipment</span><span class="key-temperature">Temperature</span><span class="key-time">Time</span></div><h2 id="current-task-title">Gather your equipment</h2><div class="instruction-scroll" id="instruction-scroll"><p id="current-task-copy">Bring a large frying pan, a large pot, a colander, a clean cutting board, a chef’s knife, a small bowl, a whisk, tongs, and a measuring cup to your station.</p></div><div class="completion-cue"><span>✦</span><div><b>When you’re done</b><p id="completion-copy">Say “ready” or tap the button below.</p></div></div><div class="timer-row" id="timer-row"><div><span class="timer-label">NEXT STEP IN</span><strong id="timer-display">01:00</strong></div><button class="timer-button" id="timer-button">Pause countdown</button></div></article>
+          <div class="cook-actions"><button class="speak-button" id="speak-button"><span>◖</span><span id="speak-label">Read this aloud</span></button><button class="done-button" id="done-button">I’m done <span>→</span></button></div>
+          <div class="quick-actions"><button id="repeat-button">↻ Repeat</button><button id="issue-button">⚑ Something’s wrong</button><button id="pause-button">Ⅱ Pause</button></div>
+          <div class="active-timers" id="active-timers" hidden><div class="section-heading"><div><p class="eyebrow">IN THE BACKGROUND</p><h3>Keep an eye on these</h3></div></div><div id="timer-cards"></div></div>
+          <div class="live-warning" id="live-warning" hidden><span class="warning-icon">!</span><div><strong id="warning-title">Check your pan</strong><p id="warning-copy">Something needs your attention.</p></div><button id="dismiss-warning">×</button></div>
+        </section>
+
+        <section class="content-view" id="recipes-view" hidden>
+          <div class="view-heading"><div><p class="eyebrow">FROM THE SOUSY COMMUNITY</p><h2>Recipe inspiration</h2><p>Save something lovely for later, or share what you’re cooking.</p></div><button class="round-action" id="open-post" aria-label="Share a recipe">＋</button></div>
+          <div class="sub-tabs" role="tablist" aria-label="Recipe feed"><button class="sub-tab active" data-recipe-tab="for-you">For you</button><button class="sub-tab" data-recipe-tab="friends">Friends</button></div>
+          <div class="post-panel" id="post-panel" hidden><div class="panel-heading"><div><p class="eyebrow">SHARE A LITTLE INSPIRATION</p><h3>Post a recipe</h3></div><button class="close-button" id="close-post">×</button></div><label>Recipe title<input id="post-title" placeholder="Example: Sunday lemon cake" /></label><label>Source or link<input id="post-source" placeholder="Where did this recipe come from?" /></label><label>Why should someone try it?<textarea id="post-story" rows="3" placeholder="Tell the community what you loved about it."></textarea></label><button class="primary-button" id="publish-post">Share inspiration <span>→</span></button></div>
+          <div id="for-you-recipes"><p class="feed-note">Suggested from all Sousy cooks, based on recipes you save, cook, and share.</p><article class="inspiration-feature paper-texture"><div class="feature-art">🍝</div><div><span class="community-tag">SUGGESTED FOR YOU</span><h3>Simple pasta carbonara</h3><p class="source">Source: Australia’s Best Recipes · posted by @sousy</p><p>Silky, cozy, and a great first guided cook. The trick is keeping the eggs moving off the heat.</p><div class="inspiration-actions"><button data-save="carbonara">♡ Save</button><button data-share="carbonara">↗ Share</button></div></div></article>
+            <div class="section-heading compact-heading"><div><p class="eyebrow">DISCOVERED FOR YOU</p><h3>Fresh from the kitchen</h3></div></div>
+            <div class="inspiration-grid" id="inspiration-grid"><article class="inspiration-card"><div class="mini-art berry-art">🍓</div><div><span class="community-tag">@mara · 92% match</span><h3>Strawberry oat crumble</h3><p class="source">Source: Mara’s family notebook</p><p>“The kind of dessert that makes the whole kitchen smell like summer.”</p><button class="text-action" data-save="crumble">♡ Save inspiration</button></div></article><article class="inspiration-card"><div class="mini-art green-art">🥬</div><div><span class="community-tag">@noah · 87% match</span><h3>Weeknight greens pasta</h3><p class="source">Source: adapted from Bon Appétit</p><p>A bright, fast dinner with pantry ingredients and very little washing up.</p><button class="text-action" data-save="greens">♡ Save inspiration</button></div></article></div>
+          </div>
+          <div id="friends-recipes" hidden><p class="feed-note">Recipes shared by people you follow on Sousy.</p><article class="inspiration-card friend-recipe"><div class="mini-art green-art">🥖</div><div><span class="community-tag">@mara · FRIEND</span><h3>Rosemary focaccia</h3><p class="source">Source: Mara’s family notebook</p><p>“Made this twice this week. The overnight rise is worth it.”</p><button class="text-action" data-save="focaccia">♡ Save inspiration</button></div></article><article class="inspiration-card friend-recipe"><div class="mini-art berry-art">🍲</div><div><span class="community-tag">@noah · FRIEND</span><h3>Cozy tomato soup</h3><p class="source">Source: Noah’s weeknight rotation</p><p>A forgiving, one-pot recipe for a rainy evening.</p><button class="text-action" data-save="tomato-soup">♡ Save inspiration</button></div></article></div>
+        </section>
+
+        <section class="content-view" id="friends-view" hidden>
+          <div class="view-heading"><div><p class="eyebrow">YOUR COOKING CIRCLE</p><h2>Find friends</h2><p>Follow cooks whose recipes make you want to get in the kitchen.</p></div><span class="saved-count" id="friend-count">2 following</span></div>
+          <div class="friend-search"><span>⌕</span><input id="friend-search-input" placeholder="Search by username or email" /><button id="find-friend-button">Find</button></div>
+          <div class="friend-section"><div class="section-heading compact-heading"><div><p class="eyebrow">SUGGESTED COOKS</p><h3>People you may like</h3></div></div><div id="friend-list"><article class="friend-row"><div class="friend-avatar avatar-mara">M</div><div class="friend-info"><strong>Mara Chen</strong><p>@mara · cozy baking and family recipes</p></div><button class="follow-button" data-follow="mara">Follow</button></article><article class="friend-row"><div class="friend-avatar avatar-noah">N</div><div class="friend-info"><strong>Noah Williams</strong><p>@noah · fast dinners and fewer dishes</p></div><button class="follow-button" data-follow="noah">Follow</button></article><article class="friend-row"><div class="friend-avatar avatar-lina">L</div><div class="friend-info"><strong>Lina Patel</strong><p>@linacooks · bright vegetables and spice</p></div><button class="follow-button" data-follow="lina">Follow</button></article></div></div>
+          <div class="friend-section"><div class="section-heading compact-heading"><div><p class="eyebrow">YOUR NETWORK</p><h3>Friend requests</h3></div></div><div class="request-row"><div class="friend-avatar avatar-eli">E</div><div class="friend-info"><strong>Eli Brooks</strong><p>@elibakes wants to follow you</p></div><button class="accept-button" data-accept="eli">Accept</button></div></div>
+        </section>
+
+        <section class="content-view" id="saved-view" hidden>
+          <div class="view-heading"><div><p class="eyebrow">YOUR LITTLE LIBRARY</p><h2>Saved</h2><p>Keep inspiration close, and find recipes you’ve already cooked.</p></div><span class="saved-count" id="saved-count">0 saved</span></div>
+          <div class="sub-tabs" role="tablist"><button class="sub-tab active" data-saved-tab="inspirations">Inspirations</button><button class="sub-tab" data-saved-tab="new-recipes">New Recipes</button><button class="sub-tab" data-saved-tab="past">Past recipes</button></div>
+          <div class="saved-panel" id="saved-inspirations"><div class="empty-saved" id="empty-saved"><span>♡</span><h3>Your saved ideas will live here</h3><p>Tap Save on an inspiration to build your cooking wish list.</p></div><div id="saved-inspiration-list"></div></div>
+          <div class="saved-panel" id="saved-new-recipes" hidden><div class="empty-saved" id="empty-new-recipes"><span>▱</span><h3>Your imported recipes will live here</h3><p>Every recipe you upload or import will be saved automatically.</p></div><div id="new-recipe-list"></div></div>
+          <div class="saved-panel" id="saved-past" hidden><article class="past-recipe"><div class="past-icon">🍝</div><div><span class="community-tag">COOKED OCT 23</span><h3>Simple pasta carbonara</h3><p class="source">Source: Australia’s Best Recipes · 4 servings</p><button class="text-action" id="cook-again">Cook again →</button></div></article><div class="empty-past"><p>Your completed recipes will collect here after you finish a cook.</p></div></div>
+        </section>
+
+        <section class="content-view" id="shopping-view" hidden>
+          <div class="view-heading"><div><p class="eyebrow">YOUR KITCHEN LIST</p><h2>Shopping list</h2><p>Ingredients from every recipe in New Recipes, ready for one trip to the store.</p></div><span class="saved-count" id="shopping-count">0 items</span></div>
+          <div class="shopping-search"><span>⌕</span><input id="shopping-filter" placeholder="Filter ingredients or recipes" /></div>
+          <div class="sub-tabs" role="tablist" aria-label="Shopping list view"><button class="sub-tab active" data-shopping-mode="combined">Combine all</button><button class="sub-tab" data-shopping-mode="by-recipe">By recipe</button></div>
+          <div id="shopping-combined" class="shopping-panel"></div>
+          <div id="shopping-by-recipe" class="shopping-panel" hidden></div>
+        </section>
+
+        <section class="content-view" id="settings-view" hidden>
+          <div class="view-heading"><div><p class="eyebrow">MAKE SOUSY YOURS</p><h2>Settings</h2><p>Set up your kitchen companion the way you like it.</p></div></div>
+          <div class="settings-card"><div class="profile-row"><div class="profile-avatar" id="profile-avatar">B</div><div><strong id="profile-name">Bertrand</strong><p id="profile-handle">Home cook · learning by doing</p></div><button class="text-action" id="open-account">Account</button></div><div class="account-panel" id="account-panel" hidden><div class="account-tabs"><button class="account-tab active" data-account-tab="signup">Sign up</button><button class="account-tab" data-account-tab="signin">Sign in</button></div><button class="google-button" id="google-signin"><span>G</span> Continue with Google</button><div class="or-divider"><span>or use email</span></div><label>Email<input id="account-email" type="email" placeholder="you@example.com" /></label><label>Username<input id="account-username" placeholder="Choose a username" /></label><label>Password<input id="account-password" type="password" placeholder="At least 8 characters" /></label><button class="primary-button" id="account-submit">Create my Sousy account <span>→</span></button><p class="account-footnote">Your profile lets friends find you and keeps your saved recipes synced.</p></div></div>
+          <div class="settings-group"><p class="eyebrow">PREFERENCES</p><div class="setting-row"><div><strong>Dark mode</strong><p>Use a deeper palette for low-light cooking.</p></div><label class="switch"><input type="checkbox" id="dark-mode-toggle" /><span></span></label></div><div class="setting-row"><div><strong>Voice instructions</strong><p>Read each step aloud automatically.</p></div><label class="switch"><input type="checkbox" id="voice-setting" checked /><span></span></label></div><div class="setting-row"><div><strong>Keep screen awake</strong><p>Request Wake Lock when guided cooking starts.</p></div><label class="switch"><input type="checkbox" id="wake-setting" checked /><span></span></label></div></div>
+          <div class="settings-group"><p class="eyebrow">COOKING DEFAULTS</p><label class="setting-input">Default servings<input type="number" value="4" min="1" /></label><label class="setting-input">Stove scale<select id="stove-scale"><option>1–10</option><option>Low / medium / high</option></select></label><label class="setting-input">Skill level<select id="skill"><option>New to cooking</option><option>Comfortable</option><option>Experienced</option></select></label><label class="setting-input">Dietary notes<textarea rows="2" placeholder="Optional allergies or preferences"></textarea></label></div>
+          <div class="settings-group"><p class="eyebrow">ACCOUNT & HELP</p><button class="settings-link">Privacy and data <span>→</span></button><button class="settings-link">Voice and accessibility <span>→</span></button><button class="settings-link">About Sousy <span>→</span></button></div>
+        </section>
+      </main>
+      <nav class="bottom-nav"><button class="nav-item active" data-view="home"><span>⌂</span><small>Cook</small></button><button class="nav-item" data-view="recipes"><span>▱</span><small>Recipes</small></button><button class="nav-item" data-view="friends"><span>♧</span><small>Friends</small></button><button class="nav-item" data-view="saved"><span>♡</span><small>Saved</small></button><button class="nav-item" data-view="shopping"><span>▤</span><small>Shop</small></button><button class="nav-item" data-view="settings"><span>⚙</span><small>Settings</small></button></nav>
+    </div>
+    <div class="toast" id="toast" role="status"></div>
+    <div class="modal-backdrop" id="mic-warning" hidden><section class="mic-warning-modal" role="alertdialog" aria-modal="true" aria-labelledby="mic-warning-title"><div class="modal-icon">◖</div><p class="eyebrow">MANUAL MODE</p><h2 id="mic-warning-title">Microphone access is off</h2><p>Sousy can’t hear your responses. You’ll need to tap <strong>“I’m done” manually for every step</strong>. You can still use all timers, instructions, and alerts.</p><button class="primary-button" id="close-mic-warning">Continue manually</button></section></div>
+    <script src="app.js"></script>
+  </body>
+</html>
