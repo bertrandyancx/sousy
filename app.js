@@ -649,6 +649,19 @@ function showAuthScreen() {
 
 function hideAuthScreen() { $('auth-screen').hidden = true; }
 
+function continueAsGuest() {
+  let guest = JSON.parse(localStorage.getItem('sous-easy-guest-profile') || 'null');
+  if (!guest) {
+    const number = Math.floor(10000 + Math.random() * 90000);
+    guest = { name: `User${number}`, handle: `@user${number}` };
+    localStorage.setItem('sous-easy-guest-profile', JSON.stringify(guest));
+  }
+  authUser = null;
+  setProfile(guest.name, guest.handle);
+  hideAuthScreen();
+  showToast(`Continuing as ${guest.name}.`);
+}
+
 function showOnboardingScreen(user) {
   const key = `sous-easy-onboarding-complete-${user?.id || 'guest'}`;
   if (localStorage.getItem(key)) return;
@@ -697,7 +710,7 @@ function initializeAuthScreen() {
     const { error } = await supabaseClient.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: window.location.origin } });
     if (error) showToast(error.message);
   });
-  $('auth-continue').addEventListener('click', hideAuthScreen);
+  $('auth-continue').addEventListener('click', continueAsGuest);
   setAuthScreenMode('signin');
 }
 
