@@ -665,12 +665,22 @@ function initializeSocialInteractions() {
     if (!supabaseClient) { showToast('Supabase accounts are not configured yet.'); return; }
     if (!email || !email.includes('@') || !password || (signup && !username)) { showToast(signup ? 'Add an email, username, and password.' : 'Add your email and password.'); return; }
     if (signup && !/^[A-Za-z0-9_]{3,30}$/.test(username)) { showToast('Username must be 3–30 letters, numbers, or underscores.'); return; }
-    const result = signup
-      ? await supabaseClient.auth.signUp({ email, password, options: { data: { username, display_name: username } } })
-      : await supabaseClient.auth.signInWithPassword({ email, password });
-    if (result.error) { showToast(result.error.message); return; }
-    $('account-panel').hidden = true;
-    showToast(signup && !result.data.session ? 'Check your email to confirm your account.' : (signup ? 'Your Sousy account is ready.' : 'Welcome back to Sousy.'));
+    const button = $('account-submit');
+    button.disabled = true;
+    button.textContent = signup ? 'Creating account…' : 'Signing in…';
+    try {
+      const result = signup
+        ? await supabaseClient.auth.signUp({ email, password, options: { data: { username, display_name: username } } })
+        : await supabaseClient.auth.signInWithPassword({ email, password });
+      if (result.error) { showToast(result.error.message); return; }
+      $('account-panel').hidden = true;
+      showToast(signup && !result.data.session ? 'Check your email to confirm your account.' : (signup ? 'Your Sousy account is ready.' : 'Welcome back to Sousy.'));
+    } catch (error) {
+      showToast(`Account request failed: ${error.message || 'Please try again.'}`);
+    } finally {
+      button.disabled = false;
+      button.innerHTML = signup ? 'Create my Sousy account <span>→</span>' : 'Sign in to Sousy <span>→</span>';
+    }
   });
 }
 
