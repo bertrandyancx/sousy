@@ -63,6 +63,7 @@ let supabaseClient = null;
 let authUser = null;
 let authScreenMode = 'signin';
 let profileDraftPhoto = '';
+let voicePreferences = JSON.parse(localStorage.getItem('sousy-voice-preferences') || '{"accent":"auto","gender":"auto"}');
 
 function renderLists() {
   $('ingredient-list').innerHTML = ingredients.length ? ingredients.map((item, index) => `<li><label class="check-item"><input type="checkbox" class="station-check" data-station="ingredient-${index}" /><span>${item}</span></label></li>`).join('') : '<li class="empty-list">Import a recipe to see ingredients.</li>';
@@ -93,14 +94,29 @@ function renderOverview() {
   list.innerHTML = stages.join('');
 }
 
+function chooseSpeechVoice() {
+  if (!('speechSynthesis' in window)) return null;
+  const voices = window.speechSynthesis.getVoices();
+  if (!voices.length) return null;
+  const accentMatches = voicePreferences.accent === 'auto' ? voices : voices.filter((voice) => voice.lang.toLowerCase().startsWith(voicePreferences.accent.toLowerCase()));
+  const genderWords = voicePreferences.gender === 'feminine'
+    ? /female|woman|samantha|karen|moira|serena|victoria|ava|allison|susan|fiona|zira|tessa/i
+    : /male|man|daniel|alex|fred|tom|arthur|oliver|lee|gordon|rishi|aaron/i;
+  const genderMatches = voicePreferences.gender === 'auto' ? accentMatches : accentMatches.filter((voice) => genderWords.test(voice.name));
+  return genderMatches[0] || accentMatches[0] || voices[0];
+}
+
 function speak(text, priority = false) {
   if (!voiceOn || !('speechSynthesis' in window)) return;
   window.speechSynthesis.cancel();
   window.clearTimeout(speechStartHandle);
   window.speechSynthesis.resume();
-  const utterance = new SpeechSynthesisUtterance(text);
-  utterance.rate = priority ? 1.08 : .92;
-  utterance.pitch = 1.03;
+  const utterance = new SpeechSynthesisUtterance(String(text).replace(/\s+/g, ' ').trim());
+  const selectedVoice = chooseSpeechVoice();
+  if (selectedVoice) utterance.voice = selectedVoice;
+  utterance.rate = priority ? 1 : .87;
+  utterance.pitch = 1;
+  utterance.volume = 1;
   speechStartHandle = window.setTimeout(() => window.speechSynthesis.speak(utterance), 40);
 }
 
@@ -485,6 +501,15 @@ function initializeSecondaryViews() {
   document.documentElement.classList.toggle('dark-mode', $('dark-mode-toggle').checked);
   $('dark-mode-toggle').addEventListener('change', (event) => { document.documentElement.classList.toggle('dark-mode', event.target.checked); localStorage.setItem('sousy-dark-mode', event.target.checked); showToast(event.target.checked ? 'Dark mode on.' : 'Light mode on.'); });
   $('voice-setting').addEventListener('change', (event) => { voiceOn = event.target.checked; if (!voiceOn) window.speechSynthesis?.cancel(); showToast(voiceOn ? 'Voice instructions on.' : 'Voice instructions muted.'); });
+  $('voice-accent').value = voicePreferences.accent || 'auto';
+  $('voice-gender').value = voicePreferences.gender || 'auto';
+  const saveVoicePreference = () => {
+    voicePreferences = { accent: $('voice-accent').value, gender: $('voice-gender').value };
+    localStorage.setItem('sousy-voice-preferences', JSON.stringify(voicePreferences));
+    showToast('Voice style updated.');
+  };
+  $('voice-accent').addEventListener('change', saveVoicePreference);
+  $('voice-gender').addEventListener('change', saveVoicePreference);
   renderNewRecipes();
   renderShopping();
 }
