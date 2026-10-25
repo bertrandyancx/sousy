@@ -736,6 +736,7 @@ function applyProfilePhoto(source) {
 initializeProfileMenu();
 $('close-mic-warning').addEventListener('click', () => { $('mic-warning').hidden = true; showToast('Manual mode on — tap “I’m done” after every action.'); });
 initializeAuthScreen();
+showAuthScreen();
 initializeSupabase();
 
 async function updatePlanFromSource() {
