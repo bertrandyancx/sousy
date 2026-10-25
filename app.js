@@ -269,6 +269,19 @@ function setup() { renderLists(); $('open-setup').addEventListener('click', () =
 
 setup();
 
+function refreshSoundToggle() {
+  const icon = voiceOn
+    ? '<svg class="speaker-icon" width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9v6h4l5 4V5L8 9H4Z"/><path d="M16 9.5a4 4 0 0 1 0 5M18.5 7a7.5 7.5 0 0 1 0 10"/></svg>'
+    : '<svg class="speaker-icon" width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9v6h4l5 4V5L8 9H4Z"/><path d="m17 9 5 5m0-5-5 5"/></svg>';
+  $('sound-toggle').innerHTML = icon;
+  $('sound-toggle').setAttribute('aria-label', voiceOn ? 'Mute voice instructions' : 'Turn voice instructions on');
+  $('sound-toggle').setAttribute('aria-pressed', String(!voiceOn));
+  $('sound-toggle').style.opacity = voiceOn ? '1' : '.48';
+}
+
+$('sound-toggle').addEventListener('click', refreshSoundToggle);
+refreshSoundToggle();
+
 // Navigation and secondary surfaces keep the cooking flow available without
 // making the bottom navigation decorative.
 const savedInspirations = new Map();
