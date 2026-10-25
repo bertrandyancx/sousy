@@ -1,4 +1,4 @@
-"""Small local server and Portkey-backed recipe planning endpoint for Sousy."""
+"""Small local server and Portkey-backed recipe planning endpoint for Sous-easy."""
 
 from __future__ import annotations
 
@@ -44,7 +44,7 @@ load_dotenv(ROOT / ".env")
 load_dotenv(ROOT.parent / ".env")
 
 
-class SousyHandler(SimpleHTTPRequestHandler):
+class SousEasyHandler(SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=str(ROOT), **kwargs)
 
@@ -164,7 +164,7 @@ def parse_source(source_type: str, source_value: str) -> dict:
 
 
 def import_recipe_from_url(url: str, preferences: dict) -> dict:
-    """Fetch Recipe schema data, then turn the new recipe into a Sousy plan."""
+    """Fetch Recipe schema data, then turn the new recipe into a Sous-easy plan."""
     url = normalize_recipe_url(url)
     page = fetch_recipe_page(url)[:1000000]
     recipe = None
@@ -263,7 +263,7 @@ def plan_image_with_luna(image: str, preferences: dict) -> dict:
     response = client.chat.completions.create(
         model="gpt-6-luna",
         messages=[
-            {"role": "system", "content": "You are Sousy's recipe planner. Read the recipe image, preserve its measurements, and return the same structured JSON plan fields as the text planner. Do not guess missing measurements."},
+            {"role": "system", "content": "You are Sous-easy's recipe planner. Read the recipe image, preserve its measurements, and return the same structured JSON plan fields as the text planner. Do not guess missing measurements."},
             {"role": "user", "content": [{"type": "text", "text": json.dumps({"preferences": preferences, "required_output": {"servings": "number or null from the image", "ingredients": "array", "equipment": "array", "tasks": "ordered beginner tasks with duration and completion_cue", "cleanup": "array", "feasibility": "object"}})}, {"type": "image_url", "image_url": {"url": image}}]},
         ],
     )
@@ -305,7 +305,7 @@ def plan_with_luna(recipe: str, preferences: dict) -> dict:
             {
                 "role": "system",
                 "content": (
-                    "You are Sousy's planning layer. Design safe, explicit cooking instructions "
+                    "You are Sous-easy's planning layer. Design safe, explicit cooking instructions "
                     "for a beginner. Do not invent missing measurements. Return valid JSON only."
                 ),
             },
@@ -318,8 +318,8 @@ def plan_with_luna(recipe: str, preferences: dict) -> dict:
 if __name__ == "__main__":
     host = os.environ.get("HOST", "0.0.0.0")
     port = int(os.environ.get("PORT", "8000"))
-    server = ThreadingHTTPServer((host, port), SousyHandler)
-    print(f"Sousy running at http://{host}:{port}")
+    server = ThreadingHTTPServer((host, port), SousEasyHandler)
+    print(f"Sous-easy running at http://{host}:{port}")
     try:
         server.serve_forever()
     except KeyboardInterrupt:

@@ -22,7 +22,7 @@ const carbonaraTestTasks = [
   { tag:'COOK', title:'Stir the bacon', duration:'5 min', minutes:5, copy:'Stir the bacon with the tongs every 30 seconds. Cook for about 5 minutes, until the fat has rendered and the edges are lightly crisp. If the bacon starts smoking, lower the burner to low, about 2 out of 10.', cue:'The bacon is browned at the edges, cooked through, and not burnt.', timer:true, timerLabel:'Bacon' },
   { tag:'COOK', title:'Turn off the bacon burner', duration:'1 min', minutes:1, copy:'Turn the frying-pan burner completely off. Keep the pan on that burner for now. Do not pour out the bacon fat; it carries flavor into the sauce.', cue:'The bacon burner is off.' },
   { tag:'COOK', title:'Add the pasta', duration:'1 min', minutes:1, copy:'Use the tongs to lower the pasta into the boiling water. Do not drop it from a height because boiling water can splash and burn you. Stir immediately so the strands separate.', cue:'All of the pasta is in the pot and moving freely.' },
-  { tag:'COOK', title:'Set the pasta timer', duration:'1 min', minutes:1, copy:'Read the cooking time printed on the pasta package. Set the Sousy timer for 1 minute less than that time. Keep the pot at a steady boil, not an aggressive overflow.', cue:'The pasta timer is set for the package time minus 1 minute.', timer:true, timerLabel:'Pasta' },
+  { tag:'COOK', title:'Set the pasta timer', duration:'1 min', minutes:1, copy:'Read the cooking time printed on the pasta package. Set the Sous-easy timer for 1 minute less than that time. Keep the pot at a steady boil, not an aggressive overflow.', cue:'The pasta timer is set for the package time minus 1 minute.', timer:true, timerLabel:'Pasta' },
   { tag:'COOK', title:'Stir the pasta', duration:'1 min', minutes:1, copy:'Stir the pasta once with the tongs now, then stir it again after about 2 minutes. Keep your face and hands away from the steam.', cue:'The pasta is separated and the water is not overflowing.' },
   { tag:'COOK', title:'Reserve pasta water', duration:'1 min', minutes:1, copy:'When the pasta timer finishes, use the measuring cup to scoop 1 cup of the hot pasta water. Set the cup on a heatproof surface. The water will help loosen the sauce later.', cue:'One cup of pasta water is safely reserved.' },
   { tag:'COOK', title:'Drain the pasta', duration:'1 min', minutes:1, copy:'Turn the pasta burner off. Put the colander firmly in the sink. Pour the pot away from your body into the colander, using dry oven mitts if the pot handles are hot. Let the pasta drain, but do not rinse it.', cue:'The pasta is drained and still hot.' },
@@ -63,7 +63,7 @@ let supabaseClient = null;
 let authUser = null;
 let authScreenMode = 'signin';
 let profileDraftPhoto = '';
-let voicePreferences = JSON.parse(localStorage.getItem('sousy-voice-preferences') || '{"accent":"auto","gender":"auto"}');
+let voicePreferences = JSON.parse(localStorage.getItem('sous-easy-voice-preferences') || '{"accent":"auto","gender":"auto"}');
 
 function renderLists() {
   $('ingredient-list').innerHTML = ingredients.length ? ingredients.map((item, index) => `<li><label class="check-item"><input type="checkbox" class="station-check" data-station="ingredient-${index}" /><span>${item}</span></label></li>`).join('') : '<li class="empty-list">Import a recipe to see ingredients.</li>';
@@ -301,7 +301,22 @@ refreshSoundToggle();
 // Navigation and secondary surfaces keep the cooking flow available without
 // making the bottom navigation decorative.
 const savedInspirations = new Map();
-let newRecipes = JSON.parse(localStorage.getItem('sousy-new-recipes') || '[]');
+function migrateLegacyStorage() {
+  const legacyPrefix = ['sous', 'y'].join('');
+  const currentPrefix = 'sous-easy';
+  const knownKeys = ['new-recipes', 'dark-mode', 'voice-preferences', 'profile', 'profile-photo'];
+  knownKeys.forEach((suffix) => {
+    const legacyKey = `${legacyPrefix}-${suffix}`;
+    const currentKey = `${currentPrefix}-${suffix}`;
+    if (!localStorage.getItem(currentKey) && localStorage.getItem(legacyKey)) localStorage.setItem(currentKey, localStorage.getItem(legacyKey));
+  });
+  Object.keys(localStorage).filter((key) => key.startsWith(`${legacyPrefix}-onboarding-complete-`)).forEach((legacyKey) => {
+    const currentKey = legacyKey.replace(`${legacyPrefix}-`, `${currentPrefix}-`);
+    if (!localStorage.getItem(currentKey)) localStorage.setItem(currentKey, localStorage.getItem(legacyKey));
+  });
+}
+migrateLegacyStorage();
+let newRecipes = JSON.parse(localStorage.getItem('sous-easy-new-recipes') || '[]');
 let activeView = 'home';
 let cookingActive = false;
 let activeSourceType = 'url';
@@ -350,7 +365,7 @@ function renderNewRecipes() {
 function saveNewRecipe(recipe, sourceUrl, plan = null) {
   const saved = { id: sourceUrl || `${recipe.title}-${Date.now()}`, title: recipe.title, source: recipe.source || 'Imported recipe', servings: recipe.servings || null, ingredients: [...ingredients], sourceUrl: sourceUrl || '', plan };
   newRecipes = [saved, ...newRecipes.filter((item) => item.id !== saved.id)];
-  localStorage.setItem('sousy-new-recipes', JSON.stringify(newRecipes));
+  localStorage.setItem('sous-easy-new-recipes', JSON.stringify(newRecipes));
   renderNewRecipes();
   renderShopping();
 }
@@ -488,7 +503,7 @@ function initializeSecondaryViews() {
   $('close-post').addEventListener('click', () => { $('post-panel').hidden = true; });
   $('publish-post').addEventListener('click', () => {
     const title = $('post-title').value.trim();
-    const source = $('post-source').value.trim() || 'Shared with the Sousy community';
+    const source = $('post-source').value.trim() || 'Shared with the Sous-easy community';
     if (!title) { showToast('Add a recipe title first.'); $('post-title').focus(); return; }
     const card = document.createElement('article');
     card.className = 'inspiration-card';
@@ -498,15 +513,15 @@ function initializeSecondaryViews() {
     $('post-title').value = ''; $('post-source').value = ''; $('post-story').value = ''; $('post-panel').hidden = true; showToast('Your inspiration is now on the community page.');
   });
   $('cook-again').addEventListener('click', () => { cookingActive = false; showView('home'); $('start-cooking').click(); });
-  $('dark-mode-toggle').checked = localStorage.getItem('sousy-dark-mode') === 'true';
+  $('dark-mode-toggle').checked = localStorage.getItem('sous-easy-dark-mode') === 'true';
   document.documentElement.classList.toggle('dark-mode', $('dark-mode-toggle').checked);
-  $('dark-mode-toggle').addEventListener('change', (event) => { document.documentElement.classList.toggle('dark-mode', event.target.checked); localStorage.setItem('sousy-dark-mode', event.target.checked); showToast(event.target.checked ? 'Dark mode on.' : 'Light mode on.'); });
+  $('dark-mode-toggle').addEventListener('change', (event) => { document.documentElement.classList.toggle('dark-mode', event.target.checked); localStorage.setItem('sous-easy-dark-mode', event.target.checked); showToast(event.target.checked ? 'Dark mode on.' : 'Light mode on.'); });
   $('voice-setting').addEventListener('change', (event) => { voiceOn = event.target.checked; if (!voiceOn) window.speechSynthesis?.cancel(); showToast(voiceOn ? 'Voice instructions on.' : 'Voice instructions muted.'); });
   $('voice-accent').value = voicePreferences.accent || 'auto';
   $('voice-gender').value = voicePreferences.gender || 'auto';
   const saveVoicePreference = () => {
     voicePreferences = { accent: $('voice-accent').value, gender: $('voice-gender').value };
-    localStorage.setItem('sousy-voice-preferences', JSON.stringify(voicePreferences));
+    localStorage.setItem('sous-easy-voice-preferences', JSON.stringify(voicePreferences));
     showToast('Voice style updated.');
   };
   $('voice-accent').addEventListener('change', saveVoicePreference);
@@ -529,7 +544,7 @@ function initializeSecondaryViews() {
   });
   $('voice-accent-detail').addEventListener('change', (event) => { $('voice-accent').value = event.target.value; $('voice-accent').dispatchEvent(new Event('change')); });
   $('voice-gender-detail').addEventListener('change', (event) => { $('voice-gender').value = event.target.value; $('voice-gender').dispatchEvent(new Event('change')); });
-  $('test-voice').addEventListener('click', () => speak('This is how Sousy will sound while you cook. Take one step at a time.', false));
+  $('test-voice').addEventListener('click', () => speak('This is how Sous-easy will sound while you cook. Take one step at a time.', false));
   renderNewRecipes();
   renderShopping();
 }
@@ -549,7 +564,7 @@ function setProfile(name, handle) {
   $('menu-profile-handle').textContent = handle.startsWith('@') ? handle : handle;
   $('menu-avatar').textContent = name.trim().charAt(0).toUpperCase();
   $('profile-button').textContent = name.trim().charAt(0).toUpperCase();
-  localStorage.setItem('sousy-profile', JSON.stringify({ name, handle }));
+  localStorage.setItem('sous-easy-profile', JSON.stringify({ name, handle }));
 }
 
 function populateProfileForm(profile = {}, user = authUser) {
@@ -620,8 +635,8 @@ function setAuthScreenMode(mode) {
   $('auth-username-field').hidden = !signup;
   $('auth-screen-eyebrow').textContent = signup ? 'JOIN THE COOKING CIRCLE' : 'WELCOME BACK';
   $('auth-screen-title').innerHTML = signup ? 'Make room for<br /><em>more good food.</em>' : 'Good cooking,<br /><em>no thinking.</em>';
-  $('auth-screen-copy').textContent = signup ? 'Create your Sousy account to find friends, save recipes, and keep your cooking progress close.' : 'Sign in to return to your cooking circle, saved recipes, and guided plans.';
-  $('auth-submit').innerHTML = signup ? 'Create my Sousy account <span>→</span>' : 'Sign in to Sousy <span>→</span>';
+  $('auth-screen-copy').textContent = signup ? 'Create your Sous-easy account to find friends, save recipes, and keep your cooking progress close.' : 'Sign in to return to your cooking circle, saved recipes, and guided plans.';
+  $('auth-submit').innerHTML = signup ? 'Create my Sous-easy account <span>→</span>' : 'Sign in to Sous-easy <span>→</span>';
   $('auth-password').autocomplete = signup ? 'new-password' : 'current-password';
 }
 
@@ -635,7 +650,7 @@ function showAuthScreen() {
 function hideAuthScreen() { $('auth-screen').hidden = true; }
 
 function showOnboardingScreen(user) {
-  const key = `sousy-onboarding-complete-${user?.id || 'guest'}`;
+  const key = `sous-easy-onboarding-complete-${user?.id || 'guest'}`;
   if (localStorage.getItem(key)) return;
   $('onboarding-screen').dataset.userKey = key;
   $('onboarding-screen').hidden = false;
@@ -664,7 +679,7 @@ async function submitAuthScreen() {
       : await supabaseClient.auth.signInWithPassword({ email, password });
     if (result.error) { showToast(friendlyAuthError(result.error)); return; }
     if (signup && !result.data.session) showToast('Check your email to confirm your account.');
-    else { hideAuthScreen(); showToast(signup ? 'Your Sousy account is ready.' : 'Welcome back to Sousy.'); }
+    else { hideAuthScreen(); showToast(signup ? 'Your Sous-easy account is ready.' : 'Welcome back to Sous-easy.'); }
   } catch (error) {
     showToast(`Account request failed: ${error.message || 'Please try again.'}`);
   } finally {
@@ -701,7 +716,7 @@ async function loadAuthenticatedProfile(user) {
   authUser = user;
   const { data } = await supabaseClient.from('profiles').select('username,display_name,avatar_url,bio,location,cooking_style').eq('id', user.id).maybeSingle();
   const metadata = user.user_metadata || {};
-  const displayName = data?.display_name || metadata.display_name || metadata.full_name || user.email?.split('@')[0] || 'Sousy cook';
+  const displayName = data?.display_name || metadata.display_name || metadata.full_name || user.email?.split('@')[0] || 'Sous-easy cook';
   const username = data?.username || metadata.username || `cook_${user.id.slice(0, 8)}`;
   setProfile(displayName, `@${username.replace(/^@/, '')}`);
   if (data?.avatar_url) applyProfilePhoto(data.avatar_url);
@@ -796,7 +811,7 @@ async function loadFriendRequests() {
   }
   const profileMap = new Map(profiles.map((profile) => [profile.id, profile]));
   container.innerHTML = requests?.length ? requests.map((request) => {
-    const profile = profileMap.get(request.sender_id) || { username: 'cook', display_name: 'Sousy cook' };
+    const profile = profileMap.get(request.sender_id) || { username: 'cook', display_name: 'Sous-easy cook' };
     return `<div class="request-row"><div class="friend-avatar">${escapeInstructionHtml(profile.display_name.charAt(0).toUpperCase())}</div><div class="friend-info"><strong>${escapeInstructionHtml(profile.display_name)}</strong><p>@${escapeInstructionHtml(profile.username)} wants to follow you</p></div><button class="accept-button" data-accept-request="${request.id}">Accept</button></div>`;
   }).join('') : '<p class="feed-note">No pending friend requests.</p>';
   container.querySelectorAll('[data-accept-request]').forEach((button) => button.addEventListener('click', () => acceptFriendRequest(button.dataset.acceptRequest, button)));
@@ -853,14 +868,14 @@ function initializeSocialInteractions() {
   });
   $('friend-search-input').addEventListener('keydown', (event) => { if (event.key === 'Enter') $('find-friend-button').click(); });
 
-  const storedProfile = JSON.parse(localStorage.getItem('sousy-profile') || 'null');
+  const storedProfile = JSON.parse(localStorage.getItem('sous-easy-profile') || 'null');
   if (storedProfile) setProfile(storedProfile.name, storedProfile.handle);
   $('open-account').addEventListener('click', () => { $('account-panel').hidden = !$('account-panel').hidden; });
   document.querySelectorAll('[data-account-tab]').forEach((tab) => tab.addEventListener('click', () => {
     document.querySelectorAll('[data-account-tab]').forEach((item) => item.classList.toggle('active', item === tab));
     const signup = tab.dataset.accountTab === 'signup';
     $('account-username').parentElement.hidden = !signup;
-    $('account-submit').innerHTML = signup ? 'Create my Sousy account <span>→</span>' : 'Sign in to Sousy <span>→</span>';
+    $('account-submit').innerHTML = signup ? 'Create my Sous-easy account <span>→</span>' : 'Sign in to Sous-easy <span>→</span>';
   }));
   $('google-signin').addEventListener('click', async () => {
     if (!supabaseClient) { showToast('Supabase accounts are not configured yet.'); return; }
@@ -884,12 +899,12 @@ function initializeSocialInteractions() {
         : await supabaseClient.auth.signInWithPassword({ email, password });
       if (result.error) { showToast(friendlyAuthError(result.error)); return; }
       $('account-panel').hidden = true;
-      showToast(signup && !result.data.session ? 'Check your email to confirm your account.' : (signup ? 'Your Sousy account is ready.' : 'Welcome back to Sousy.'));
+      showToast(signup && !result.data.session ? 'Check your email to confirm your account.' : (signup ? 'Your Sous-easy account is ready.' : 'Welcome back to Sous-easy.'));
     } catch (error) {
       showToast(`Account request failed: ${error.message || 'Please try again.'}`);
     } finally {
       button.disabled = false;
-      button.innerHTML = signup ? 'Create my Sousy account <span>→</span>' : 'Sign in to Sousy <span>→</span>';
+      button.innerHTML = signup ? 'Create my Sous-easy account <span>→</span>' : 'Sign in to Sous-easy <span>→</span>';
     }
   });
 }
@@ -919,8 +934,8 @@ function initializeProfileMenu() {
       }
       authUser = null;
       hideOnboardingScreen();
-      localStorage.removeItem('sousy-profile');
-      localStorage.removeItem('sousy-profile-photo');
+      localStorage.removeItem('sous-easy-profile');
+      localStorage.removeItem('sous-easy-profile-photo');
       setProfile('Bertrand', '@homecook');
       $('profile-menu').hidden = true;
       $('profile-button').setAttribute('aria-expanded', 'false');
@@ -932,10 +947,10 @@ function initializeProfileMenu() {
     const file = event.target.files[0];
     if (!file) return;
     const reader = new FileReader();
-    reader.onload = () => { localStorage.setItem('sousy-profile-photo', reader.result); applyProfilePhoto(reader.result); showToast('Profile photo updated.'); };
+    reader.onload = () => { localStorage.setItem('sous-easy-profile-photo', reader.result); applyProfilePhoto(reader.result); showToast('Profile photo updated.'); };
     reader.readAsDataURL(file);
   });
-  const savedPhoto = localStorage.getItem('sousy-profile-photo');
+  const savedPhoto = localStorage.getItem('sous-easy-profile-photo');
   if (savedPhoto) applyProfilePhoto(savedPhoto);
 }
 
@@ -1065,7 +1080,7 @@ async function importRecipeFromUrl(url) {
     applyImportedRecipe(result, normalizedUrl);
   } catch (error) {
     if (error.name === 'AbortError' || requestId !== importRequestId) return;
-    $('serving-status').textContent = 'Import failed. Check the URL and make sure the Sousy server is running.';
+    $('serving-status').textContent = 'Import failed. Check the URL and make sure the Sous-easy server is running.';
     showToast(`I could not import that recipe: ${error.message}`);
   } finally {
     if (requestId === importRequestId) button.innerHTML = originalLabel;

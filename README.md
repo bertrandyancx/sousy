@@ -1,6 +1,6 @@
-# Sousy — Cooking Companion
+# Sous-easy — Cooking Companion
 
-Sousy is a voice-first cooking companion for newer cooks. It converts a recipe into detailed, timed, adaptive instructions and keeps the next action visible while the cook's hands are busy.
+Sous-easy is a voice-first cooking companion for newer cooks. It converts a recipe into detailed, timed, adaptive instructions and keeps the next action visible while the cook's hands are busy.
 
 ## Run locally
 
@@ -27,7 +27,7 @@ Sousy is a voice-first cooking companion for newer cooks. It converts a recipe i
 1. Push this project to a GitHub repository. Do not upload `.env`; add `PORTKEY_API_KEY` in Render's Environment settings.
 2. In Render, choose **New → Blueprint** and select the repository. Render will detect `render.yaml`.
 3. Set the `PORTKEY_API_KEY` secret when Render asks for it, then deploy.
-4. Open the generated `https://sousy-....onrender.com` URL. Keep the Render service running; no local Terminal or Cloudflare Tunnel is needed.
+4. Open the generated `https://sous-easy-....onrender.com` URL. Keep the Render service running; no local Terminal or Cloudflare Tunnel is needed.
 
 The Render service uses the `PORT` assigned by Render, binds to all interfaces, and exposes `/api/health` for service checks.
 

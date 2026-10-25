@@ -1,10 +1,10 @@
--- Sousy account and social data model.
+-- Sous-easy account and social data model.
 -- Run this once in Supabase Dashboard → SQL Editor.
 
 create table if not exists public.profiles (
   id uuid primary key references auth.users(id) on delete cascade,
   username text not null check (username ~ '^[A-Za-z0-9_]{3,30}$'),
-  display_name text not null default 'Sousy cook',
+  display_name text not null default 'Sous-easy cook',
   avatar_url text,
   created_at timestamptz not null default now()
 );
@@ -61,7 +61,7 @@ begin
   values (
     new.id,
     requested_username,
-    coalesce(nullif(new.raw_user_meta_data ->> 'display_name', ''), split_part(coalesce(new.email, 'Sousy cook'), '@', 1)),
+    coalesce(nullif(new.raw_user_meta_data ->> 'display_name', ''), split_part(coalesce(new.email, 'Sous-easy cook'), '@', 1)),
     new.raw_user_meta_data ->> 'avatar_url'
   )
   on conflict (id) do nothing;
