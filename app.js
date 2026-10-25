@@ -51,6 +51,7 @@ const $ = (id) => document.getElementById(id);
 let current = 0;
 let voiceOn = true;
 let listening = false;
+let assistantSpeaking = false;
 let timerSeconds = 0;
 let timerHandle = null;
 let wakeLock = null;
@@ -121,7 +122,7 @@ function renderOverview() {
   const stages = [];
   for (let index = 0; index < tasks.length; index += chunkSize) {
     const group = tasks.slice(index, index + chunkSize);
-    stages.push(`<li><b>${escapeInstructionHtml(group[0].title)}</b><span>${group.length} detailed action${group.length === 1 ? '' : 's'} · ${escapeInstructionHtml(group[0].tag.toLowerCase())}</span></li>`);
+    stages.push(`<li class="overview-stage"><details><summary><b>${escapeInstructionHtml(group[0].title)}</b><span>${group.length} detailed action${group.length === 1 ? '' : 's'} · ${escapeInstructionHtml(group[0].tag.toLowerCase())}</span></summary><ol class="overview-actions">${group.map((task) => `<li><details class="overview-action"><summary><b>${escapeInstructionHtml(task.title)}</b><span>${escapeInstructionHtml(task.duration || '1 min')}</span></summary><div class="overview-action-copy"><p>${formatInstruction(task.copy || '')}</p><p><strong>When done:</strong> ${formatInstruction(task.cue || 'Tell me when this action is complete.')}</p></div></details></li>`).join('')}</ol></details></li>`);
   }
   stageCount.textContent = `${stages.length} stages`;
   list.innerHTML = stages.join('');
@@ -141,6 +142,7 @@ function chooseSpeechVoice() {
 
 function speak(text, priority = false) {
   if (!voiceOn || !('speechSynthesis' in window)) return;
+  assistantSpeaking = false;
   window.speechSynthesis.cancel();
   window.clearTimeout(speechStartHandle);
   window.speechSynthesis.resume();
@@ -150,6 +152,22 @@ function speak(text, priority = false) {
   utterance.rate = priority ? 1 : .87;
   utterance.pitch = 1;
   utterance.volume = 1;
+  utterance.onstart = () => {
+    assistantSpeaking = true;
+    if (recognition) {
+      const activeRecognition = recognition;
+      recognition = null;
+      listening = false;
+      activeRecognition.onend = null;
+      try { activeRecognition.stop(); } catch (error) {}
+    }
+  };
+  const resumeListening = () => {
+    assistantSpeaking = false;
+    if (cookingActive && !manualMode && $('cook-mode') && !$('cook-mode').hidden && !recognition) window.setTimeout(beginListening, 250);
+  };
+  utterance.onend = resumeListening;
+  utterance.onerror = resumeListening;
   speechStartHandle = window.setTimeout(() => window.speechSynthesis.speak(utterance), 40);
 }
 
@@ -285,21 +303,37 @@ function beginListening() {
   const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
   if (!SpeechRecognition) { showMicWarning(); return; }
   recognition = new SpeechRecognition();
-  recognition.continuous = true; recognition.interimResults = false; recognition.lang = 'en-US';
+  const activeRecognition = recognition;
+  recognition.continuous = true; recognition.interimResults = false; recognition.maxAlternatives = 1; recognition.lang = 'en-US';
   recognition.onstart = () => { manualMode = false; listening = true; $('listen-status').classList.remove('off'); $('listening-label').textContent = 'Listening'; };
-  recognition.onend = () => { listening = false; if (!$('cook-mode').hidden) { window.setTimeout(() => { try { recognition.start(); } catch (error) {} }, 300); } };
-  recognition.onerror = (event) => { $('listen-status').classList.add('off'); if (event.error === 'not-allowed' || event.error === 'service-not-allowed') { showMicWarning(); recognition.onend = null; try { recognition.stop(); } catch (error) {} recognition = null; } else $('listening-label').textContent = 'Manual mode'; };
-  recognition.onresult = (event) => { const last = event.results[event.results.length - 1][0].transcript.toLowerCase(); handleVoiceCommand(last); };
+  recognition.onend = () => { listening = false; if (!assistantSpeaking && recognition === activeRecognition && !$('cook-mode').hidden) { window.setTimeout(() => { try { activeRecognition.start(); } catch (error) {} }, 300); } };
+  recognition.onerror = (event) => { $('listen-status').classList.add('off'); if (event.error === 'not-allowed' || event.error === 'service-not-allowed') { showMicWarning(); activeRecognition.onend = null; try { activeRecognition.stop(); } catch (error) {} recognition = null; } else $('listening-label').textContent = 'Listening for a cooking command'; };
+  recognition.onresult = (event) => {
+    const result = event.results[event.results.length - 1];
+    if (!result?.isFinal) return;
+    const confidence = result[0]?.confidence;
+    if (confidence && confidence < .52) return;
+    handleVoiceCommand(result[0].transcript.toLowerCase());
+  };
   try { recognition.start(); } catch (error) { $('listen-status').classList.add('off'); }
 }
 
 function handleVoiceCommand(text) {
-  if (text.includes('repeat')) { renderTask(true); return; }
-  if (text.includes('pause')) { pauseCooking(); return; }
-  if (text.includes('not progressing') || text.includes('not done') || text.includes('not ready') || text.includes('still working') || text.includes('taking longer') || text.includes('stuck')) { recalculateInstructions(text); return; }
-  if (text.includes('wrong') || text.includes('problem') || text.includes('burn') || text.includes('smoke')) { recalculateInstructions(text); return; }
-  if (text.includes('ready') || text.includes('done') || text.includes('next')) { advanceTask(); return; }
-  showToast(`I heard: “${text}”`);
+  const command = text.replace(/^(hey\s+)?sous[- ]?easy[,:]?\s*/i, '').trim();
+  const directCommand = /\b(repeat|again|pause|stop|resume|continue|ready|done|next|back|previous|not progressing|not done|not ready|still working|taking longer|stuck|missing|wrong|problem|burn|smoke|too hot|boil over|what(?:'s| is) next|how long|what do i do)\b/i.test(command);
+  if (!directCommand) return;
+  if (/repeat|again|say that/i.test(command)) { renderTask(true); return; }
+  if (/pause|stop/i.test(command)) { pauseCooking(); return; }
+  if (/resume|continue/i.test(command)) { resumeCooking(); return; }
+  if (/back|previous/i.test(command)) { goToPreviousTask(); return; }
+  if (/what(?:'s| is) next|what do i do next/i.test(command)) {
+    const nextTask = tasks[current + 1];
+    speak(nextTask ? `Next: ${nextTask.title}. ${nextTask.copy}` : 'This is the last action in the plan.', false);
+    return;
+  }
+  if (/how long/i.test(command)) { speak(`This action takes about ${tasks[current]?.duration || 'a moment'}.`, false); return; }
+  if (/not progressing|not done|not ready|still working|taking longer|stuck|missing|wrong|problem|burn|smoke|too hot|boil over/i.test(command)) { recalculateInstructions(command); return; }
+  if (/ready|done|next/i.test(command)) { advanceTask(); }
 }
 
 async function requestWakeLock() { if (!('wakeLock' in navigator)) { showToast('Wake Lock is not supported here; keep the screen active.'); return; } try { wakeLock = await navigator.wakeLock.request('screen'); $('wake-button').textContent = '◉'; showToast('Screen will stay awake while cooking.'); } catch (error) { showToast('Please keep the screen awake while cooking.'); } }
@@ -308,11 +342,15 @@ function stopListening() { if (recognition) { recognition.onend = null; recognit
 
 function startCooking() { if (!tasks.length) { showToast('Import a recipe before starting.'); return; } cookingActive = true; $('dashboard').hidden = true; $('setup-panel').hidden = true; $('cook-mode').hidden = false; current = 0; renderTask(true); requestWakeLock(); beginListening(); window.scrollTo({top:0, behavior:'smooth'}); }
 
+function goToPreviousTask() { if (current <= 0) { showToast('This is the first action.'); return; } stopTimer(); hideWarning(); current -= 1; renderTask(true); }
+
 function advanceTask() { if (current >= tasks.length - 1) { finishCooking(); return; } stopTimer(); hideWarning(); current += 1; renderTask(true); }
 
-function finishCooking() { $('progress-bar').style.width = '100%'; $('current-task-title').textContent = 'Dinner is ready'; $('current-task-copy').textContent = 'You made it through the plan. Sit down, take a breath, and enjoy your meal.'; $('completion-copy').textContent = 'You made it through the full cooking and cleanup plan.'; $('done-button').textContent = 'Finished ✓'; speak('Dinner is ready. You made it through the plan.'); showToast('Beautiful work — dinner is ready.'); stopListening(); if (wakeLock) wakeLock.release(); }
+function finishCooking() { cookingActive = false; $('progress-bar').style.width = '100%'; $('current-task-title').textContent = 'Dinner is ready'; $('current-task-copy').textContent = 'You made it through the plan. Sit down, take a breath, and enjoy your meal.'; $('completion-copy').textContent = 'You made it through the full cooking and cleanup plan.'; $('done-button').textContent = 'Finished ✓'; speak('Dinner is ready. You made it through the plan.'); showToast('Beautiful work — dinner is ready.'); stopListening(); if (wakeLock) wakeLock.release(); }
 
-function pauseCooking() { if (window.speechSynthesis) window.speechSynthesis.pause(); showToast('Cooking paused. Say “ready” when you want to continue.'); }
+function pauseCooking() { stopTimer(); if (window.speechSynthesis) window.speechSynthesis.pause(); showToast('Cooking paused. Say “resume” when you want to continue.'); }
+
+function resumeCooking() { if (window.speechSynthesis) window.speechSynthesis.resume(); if (!timerHandle) startTimer(); speak(`Resuming: ${tasks[current]?.title || 'the current action'}.`, false); }
 
 function setup() { renderLists(); $('open-setup').addEventListener('click', () => { $('setup-panel').hidden = false; $('setup-panel').scrollIntoView({behavior:'smooth'}); }); $('close-setup').addEventListener('click', () => $('setup-panel').hidden = true); $('start-cooking').addEventListener('click', startCooking); $('back-to-prep').addEventListener('click', () => { $('cook-mode').hidden = true; $('dashboard').hidden = false; stopListening(); stopTimer(); if (wakeLock) wakeLock.release(); }); $('done-button').addEventListener('click', advanceTask); $('repeat-button').addEventListener('click', () => renderTask(true)); $('pause-button').addEventListener('click', pauseCooking); $('speak-button').addEventListener('click', () => renderTask(true)); $('timer-button').addEventListener('click', startTimer); $('dismiss-warning').addEventListener('click', hideWarning); $('issue-button').addEventListener('click', () => { showWarning('Tell me what changed', 'The plan is paused. You can say “the sauce is too thick,” “I’m missing an ingredient,” or tap Resume when ready.'); pauseCooking(); }); $('wake-button').addEventListener('click', requestWakeLock); $('sound-toggle').addEventListener('click', () => { voiceOn = !voiceOn; refreshSoundToggle(); if (!voiceOn) window.speechSynthesis?.cancel(); showToast(voiceOn ? 'Voice instructions on.' : 'Voice instructions muted.'); }); }
 
