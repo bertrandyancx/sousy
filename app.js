@@ -64,11 +64,43 @@ let authUser = null;
 let authScreenMode = 'signin';
 let profileDraftPhoto = '';
 let onboardingShownThisSession = false;
+let currentRecipeMeta = { title: '', source: '', servings: null, total_time: null };
+let currentRecipeId = '';
+let editingSavedRecipeIndex = null;
 let voicePreferences = JSON.parse(localStorage.getItem('sous-easy-voice-preferences') || '{"accent":"auto","gender":"auto"}');
 
+function firstEntryValue(entry, keys) {
+  for (const key of keys) {
+    const value = entry?.[key];
+    if (value !== undefined && value !== null && String(value).trim()) return String(value).trim();
+  }
+  return '';
+}
+
+function formatPlanEntry(entry, type) {
+  if (typeof entry === 'string') return entry.trim();
+  if (!entry || typeof entry !== 'object') return '';
+  const quantity = firstEntryValue(entry, ['quantity', 'amount', 'measurement', 'measure']);
+  const name = firstEntryValue(entry, type === 'equipment'
+    ? ['item', 'equipment', 'tool', 'name', 'description']
+    : ['item', 'ingredient', 'food', 'name', 'description']);
+  const detail = firstEntryValue(entry, type === 'equipment'
+    ? ['purpose', 'use', 'notes', 'safety_note']
+    : ['preparation', 'prep', 'notes', 'state']);
+  const main = [quantity, name].filter(Boolean).join(' ').trim();
+  return [main || detail, main && detail ? `— ${detail}` : ''].filter(Boolean).join(' ').trim();
+}
+
+function formatStationItem(item) {
+  const parts = String(item || '').split(/\s+—\s+/, 2);
+  const main = escapeInstructionHtml(parts[0]);
+  const detail = parts[1] ? `<small>${escapeInstructionHtml(parts[1])}</small>` : '';
+  return `<span class="station-item-copy"><strong>${main}</strong>${detail}</span>`;
+}
+
 function renderLists() {
-  $('ingredient-list').innerHTML = ingredients.length ? ingredients.map((item, index) => `<li><label class="check-item"><input type="checkbox" class="station-check" data-station="ingredient-${index}" /><span>${item}</span></label></li>`).join('') : '<li class="empty-list">Import a recipe to see ingredients.</li>';
-  $('equipment-list').innerHTML = equipment.length ? equipment.map((item, index) => `<li><label class="check-item"><input type="checkbox" class="station-check" data-station="equipment-${index}" /><span>${item}</span></label></li>`).join('') : '<li class="empty-list">Import a recipe to see equipment.</li>';
+  $('ingredient-list').innerHTML = ingredients.length ? ingredients.map((item, index) => `<li><label class="check-item"><input type="checkbox" class="station-check" data-station="ingredient-${index}" />${formatStationItem(item)}</label></li>`).join('') : '<li class="empty-list">Import a recipe to see ingredients.</li>';
+  $('equipment-list').innerHTML = equipment.length ? equipment.map((item, index) => `<li><label class="check-item"><input type="checkbox" class="station-check" data-station="equipment-${index}" />${formatStationItem(item)}</label></li>`).join('') : '<li class="empty-list">Import a recipe to see equipment.</li>';
   $('progress-pill').textContent = `0 / ${tasks.length}`;
   $('action-count').textContent = `${tasks.length} detailed action${tasks.length === 1 ? '' : 's'}`;
   $('start-cooking').disabled = tasks.length === 0;
@@ -348,6 +380,63 @@ function saveInspiration(id, title, source, icon) {
   renderSavedInspirations();
 }
 
+const sourceAssetMemory = new Map();
+let sourceAssetDbPromise = null;
+
+function sourceAssetDb() {
+  if (!window.indexedDB) return Promise.resolve(null);
+  if (!sourceAssetDbPromise) sourceAssetDbPromise = new Promise((resolve) => {
+    const request = window.indexedDB.open('sous-easy-assets', 1);
+    request.onupgradeneeded = () => request.result.createObjectStore('originals', { keyPath: 'id' });
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => resolve(null);
+  });
+  return sourceAssetDbPromise;
+}
+
+async function storeSourceAsset(id, asset) {
+  if (!id || !asset?.data) return;
+  sourceAssetMemory.set(id, asset);
+  const db = await sourceAssetDb();
+  if (!db) return;
+  await new Promise((resolve) => {
+    const request = db.transaction('originals', 'readwrite').objectStore('originals').put({ id, type: asset.type, name: asset.name, data: asset.data });
+    request.onsuccess = request.onerror = () => resolve();
+  });
+}
+
+async function loadSourceAsset(id) {
+  if (sourceAssetMemory.has(id)) return sourceAssetMemory.get(id);
+  const db = await sourceAssetDb();
+  if (!db) return null;
+  return new Promise((resolve) => {
+    const request = db.transaction('originals', 'readonly').objectStore('originals').get(id);
+    request.onsuccess = () => resolve(request.result || null);
+    request.onerror = () => resolve(null);
+  });
+}
+
+async function openOriginalSource(recipe) {
+  if (recipe.sourceUrl && /^https?:\/\//i.test(recipe.sourceUrl)) {
+    window.open(recipe.sourceUrl, '_blank', 'noopener,noreferrer');
+    return;
+  }
+  const preview = window.open('about:blank', '_blank');
+  const asset = await loadSourceAsset(recipe.sourceAssetId || recipe.id);
+  if (!asset?.data) {
+    preview?.close();
+    showToast('The original file is no longer available here. Upload it again to save a viewable copy.');
+    return;
+  }
+  if (preview) preview.location.href = asset.data;
+  else showToast('Allow pop-ups to view the original recipe.');
+}
+
+function savedOriginalAction(recipe, index) {
+  if (recipe.sourceUrl && /^https?:\/\//i.test(recipe.sourceUrl)) return `<a class="original-link" href="${escapeInstructionHtml(recipe.sourceUrl)}" target="_blank" rel="noopener noreferrer">View original ↗</a>`;
+  return `<button class="recipe-edit-action" data-open-original-index="${index}" type="button">View original</button>`;
+}
+
 function renderSavedInspirations() {
   const list = $('saved-inspiration-list');
   $('saved-count').textContent = `${savedInspirations.size} saved`;
@@ -357,17 +446,98 @@ function renderSavedInspirations() {
 
 function renderNewRecipes() {
   $('empty-new-recipes').hidden = newRecipes.length > 0;
-  $('new-recipe-list').innerHTML = newRecipes.map((recipe, index) => `<article class="new-recipe-saved"><div class="recipe-mini-icon">🍽</div><div><h3>${escapeInstructionHtml(recipe.title)}</h3><p>Source: ${escapeInstructionHtml(recipe.source)}${recipe.servings ? ` · ${recipe.servings} servings` : ''}</p><button class="text-action" data-load-saved-index="${index}">Cook this recipe →</button></div></article>`).join('');
+  $('new-recipe-list').innerHTML = newRecipes.map((recipe, index) => `<article class="new-recipe-saved"><div class="recipe-mini-icon">🍽</div><div><h3>${escapeInstructionHtml(recipe.title)}</h3><p>Source: ${escapeInstructionHtml(recipe.source)}${recipe.servings ? ` · ${recipe.servings} servings` : ''}</p><div class="recipe-card-actions"><button class="text-action" data-load-saved-index="${index}">Cook this recipe →</button><button class="recipe-edit-action" data-edit-saved-index="${index}" type="button">Edit recipe</button>${savedOriginalAction(recipe, index)}</div></div></article>`).join('');
   document.querySelectorAll('[data-load-saved-index]').forEach((button) => button.addEventListener('click', () => loadSavedRecipe(Number(button.dataset.loadSavedIndex))));
+  document.querySelectorAll('[data-edit-saved-index]').forEach((button) => button.addEventListener('click', () => openRecipeEditor(Number(button.dataset.editSavedIndex))));
+  document.querySelectorAll('[data-open-original-index]').forEach((button) => button.addEventListener('click', () => openOriginalSource(newRecipes[Number(button.dataset.openOriginalIndex)])));
   renderSavedRecipePicker();
 }
 
-function saveNewRecipe(recipe, sourceUrl, plan = null) {
-  const saved = { id: sourceUrl || `${recipe.title}-${Date.now()}`, title: recipe.title, source: recipe.source || 'Imported recipe', servings: recipe.servings || null, ingredients: [...ingredients], sourceUrl: sourceUrl || '', plan };
+function saveNewRecipe(recipe, sourceUrl, plan = null, sourceAsset = null) {
+  const isWebSource = /^https?:\/\//i.test(sourceUrl || '');
+  const id = sourceAsset?.id || sourceUrl || `${recipe.title}-${Date.now()}`;
+  const saved = { id, title: recipe.title, source: recipe.source || 'Imported recipe', servings: recipe.servings || null, ingredients: [...ingredients], equipment: [...equipment], sourceUrl: isWebSource ? sourceUrl : '', sourceType: sourceAsset?.type || (isWebSource ? 'url' : 'file'), sourceName: sourceAsset?.name || recipe.source || '', sourceAssetId: id, plan };
   newRecipes = [saved, ...newRecipes.filter((item) => item.id !== saved.id)];
+  currentRecipeId = id;
+  if (sourceAsset?.data) storeSourceAsset(id, sourceAsset);
   localStorage.setItem('sous-easy-new-recipes', JSON.stringify(newRecipes));
   renderNewRecipes();
   renderShopping();
+}
+
+function openRecipeEditor(savedIndex = null) {
+  editingSavedRecipeIndex = Number.isInteger(savedIndex) ? savedIndex : null;
+  const saved = editingSavedRecipeIndex === null ? null : newRecipes[editingSavedRecipeIndex];
+  const meta = saved || currentRecipeMeta;
+  $('recipe-edit-title').value = meta.title || '';
+  $('recipe-edit-source').value = meta.source || '';
+  $('recipe-edit-servings').value = meta.servings || '';
+  const savedIngredients = saved?.ingredients?.length ? saved.ingredients : (saved?.plan?.ingredients || []).map((entry) => formatPlanEntry(entry, 'ingredient'));
+  const savedEquipment = saved?.equipment?.length ? saved.equipment : (saved?.plan?.equipment || []).map((entry) => formatPlanEntry(entry, 'equipment'));
+  $('recipe-edit-ingredients').value = (editingSavedRecipeIndex === null ? ingredients : savedIngredients).join('\n');
+  $('recipe-edit-equipment').value = (editingSavedRecipeIndex === null ? equipment : savedEquipment).join('\n');
+  $('recipe-editor-title').textContent = editingSavedRecipeIndex === null ? 'Edit current recipe' : 'Edit saved recipe';
+  $('recipe-editor').hidden = false;
+  window.setTimeout(() => $('recipe-edit-title').focus(), 40);
+}
+
+function closeRecipeEditor() {
+  $('recipe-editor').hidden = true;
+  editingSavedRecipeIndex = null;
+}
+
+function editorLines(value) {
+  return String(value || '').split('\n').map((line) => line.trim()).filter(Boolean);
+}
+
+function updateSavedRecipe(recipe) {
+  const index = newRecipes.findIndex((item) => item.id === recipe.id);
+  if (index === -1) return;
+  newRecipes[index] = recipe;
+  localStorage.setItem('sous-easy-new-recipes', JSON.stringify(newRecipes));
+  renderNewRecipes();
+  renderShopping();
+}
+
+function saveRecipeEditor() {
+  const title = $('recipe-edit-title').value.trim();
+  if (!title) { showToast('Add a recipe title first.'); $('recipe-edit-title').focus(); return; }
+  const source = $('recipe-edit-source').value.trim() || 'Edited recipe';
+  const servings = Number($('recipe-edit-servings').value) || null;
+  const nextIngredients = editorLines($('recipe-edit-ingredients').value);
+  const nextEquipment = editorLines($('recipe-edit-equipment').value);
+  if (!nextIngredients.length) { showToast('Add at least one ingredient.'); $('recipe-edit-ingredients').focus(); return; }
+
+  if (editingSavedRecipeIndex !== null) {
+    const saved = newRecipes[editingSavedRecipeIndex];
+    if (!saved) return;
+    const nextPlan = saved.plan ? { ...saved.plan, ingredients: nextIngredients, equipment: nextEquipment } : null;
+    const updated = { ...saved, title, source, servings, ingredients: nextIngredients, equipment: nextEquipment, plan: nextPlan };
+    updateSavedRecipe(updated);
+    if (currentRecipeId === updated.id) {
+      currentRecipeMeta = { ...currentRecipeMeta, title, source, servings };
+      ingredients = nextIngredients;
+      equipment = nextEquipment;
+      renderLists();
+    }
+  } else {
+    currentRecipeMeta = { ...currentRecipeMeta, title, source, servings };
+    ingredients = nextIngredients;
+    equipment = nextEquipment;
+    renderLists();
+    const currentSaved = newRecipes.find((item) => item.id === currentRecipeId);
+    if (currentSaved) updateSavedRecipe({ ...currentSaved, title, source, servings, ingredients: nextIngredients, equipment: nextEquipment, plan: currentSaved.plan ? { ...currentSaved.plan, ingredients: nextIngredients, equipment: nextEquipment } : null });
+    const titleElement = $('recipe-title');
+    titleElement.textContent = title;
+    const sourceMark = document.createElement('span');
+    sourceMark.className = 'title-source';
+    sourceMark.textContent = ` · ${source}`;
+    titleElement.appendChild(sourceMark);
+    renderCurrentSourceLabel();
+    if (servings) applyParsedServingSize(servings, 'edited recipe');
+  }
+  closeRecipeEditor();
+  showToast('Recipe list updated.');
 }
 
 function renderSavedRecipePicker() {
@@ -380,7 +550,9 @@ function loadSavedRecipe(index) {
   const saved = newRecipes[index];
   if (!saved) return;
   if (!saved.plan) { showToast('This older saved item needs to be imported again to create a cooking plan.'); return; }
-  applyImportedRecipe({ recipe: { title: saved.title, source: saved.source, servings: saved.servings, total_time: saved.plan.total_time || null }, plan: saved.plan }, saved.sourceUrl || saved.id);
+  currentRecipeId = saved.id;
+  const savedPlan = { ...saved.plan, ingredients: saved.ingredients?.length ? saved.ingredients : saved.plan.ingredients, equipment: saved.equipment?.length ? saved.equipment : saved.plan.equipment };
+  applyImportedRecipe({ recipe: { title: saved.title, source: saved.source, servings: saved.servings, total_time: savedPlan.total_time || null }, plan: savedPlan }, saved.sourceUrl || saved.id, { type: saved.sourceType || (saved.sourceUrl ? 'url' : 'file'), name: saved.sourceName || saved.title, id: saved.sourceAssetId || saved.id });
   showView('home');
   $('setup-panel').hidden = true;
   $('dashboard').scrollIntoView({ behavior: 'smooth' });
@@ -476,6 +648,12 @@ function initializeSecondaryViews() {
     $('setup-panel').hidden = true;
     if (!cookingActive) $('dashboard').hidden = false;
   });
+  $('edit-station').addEventListener('click', () => openRecipeEditor());
+  $('edit-station-equipment').addEventListener('click', () => openRecipeEditor());
+  $('close-recipe-editor').addEventListener('click', closeRecipeEditor);
+  $('cancel-recipe-editor').addEventListener('click', closeRecipeEditor);
+  $('save-recipe-editor').addEventListener('click', saveRecipeEditor);
+  $('recipe-editor').addEventListener('click', (event) => { if (event.target.id === 'recipe-editor') closeRecipeEditor(); });
   document.querySelectorAll('.nav-item').forEach((item) => item.addEventListener('click', () => showView(item.dataset.view)));
   document.querySelectorAll('[data-saved-tab]').forEach((tab) => tab.addEventListener('click', () => {
     document.querySelectorAll('[data-saved-tab]').forEach((item) => item.classList.toggle('active', item === tab));
@@ -1099,7 +1277,7 @@ async function importPdfRecipe(file) {
     const result = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(result.error || `PDF analysis failed (${response.status})`);
     const title = file.name.replace(/\.pdf$/i, '') || 'Uploaded PDF';
-    applyImportedRecipe({ recipe: { title, source: 'Uploaded PDF', servings: parseServingSize(result.text || ''), total_time: null }, plan: result.plan }, file.name);
+    applyImportedRecipe({ recipe: { title, source: 'Uploaded PDF', servings: parseServingSize(result.text || ''), total_time: null }, plan: result.plan }, file.name, { type: 'pdf', name: file.name, data: pdf });
   } catch (error) {
     const message = plannerErrorMessage(error, 'The PDF could not be imported.');
     $('serving-status').textContent = message;
@@ -1138,7 +1316,7 @@ async function importImageRecipe(file) {
     const result = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(result.error || `Image analysis failed (${response.status})`);
     const title = file.name.replace(/\.[^.]+$/, '') || 'Uploaded picture';
-    applyImportedRecipe({ recipe:{ title, source:'Uploaded picture', servings:result.plan?.servings || null, total_time:null }, plan:result.plan }, file.name);
+    applyImportedRecipe({ recipe:{ title, source:'Uploaded picture', servings:result.plan?.servings || null, total_time:null }, plan:result.plan }, file.name, { type: 'image', name: file.name, data: imageData });
   } catch (error) {
     const message = plannerErrorMessage(error, 'I could not read that picture. Try a clearer JPG or PNG image.');
     $('serving-status').textContent = message;
@@ -1160,19 +1338,43 @@ function formatRecipeTime(totalTime) {
   return minutes ? `${minutes} min` : 'time varies';
 }
 
-function applyImportedRecipe(payload, sourceUrl) {
+function renderCurrentSourceLabel() {
+  const container = $('recipe-source-label');
+  container.innerHTML = '';
+  const sourceLabel = document.createElement('strong');
+  sourceLabel.textContent = 'Source: ';
+  container.append(sourceLabel, `${currentRecipeMeta.source || 'Recipe source'}${currentRecipeMeta.servings ? ` · ${currentRecipeMeta.servings} servings` : ''}`);
+  if (currentRecipeMeta.sourceUrl && /^https?:\/\//i.test(currentRecipeMeta.sourceUrl)) {
+    const link = document.createElement('a');
+    link.className = 'original-link';
+    link.href = currentRecipeMeta.sourceUrl;
+    link.target = '_blank';
+    link.rel = 'noopener noreferrer';
+    link.textContent = 'View original ↗';
+    container.append(' ', link);
+  } else if (currentRecipeMeta.sourceType && currentRecipeMeta.sourceType !== 'url') {
+    const button = document.createElement('button');
+    button.className = 'original-link original-button';
+    button.type = 'button';
+    button.textContent = 'View original';
+    button.addEventListener('click', () => openOriginalSource({ id: currentRecipeMeta.sourceAssetId, sourceAssetId: currentRecipeMeta.sourceAssetId, sourceUrl: currentRecipeMeta.sourceUrl }));
+    container.append(' ', button);
+  }
+}
+
+function applyImportedRecipe(payload, sourceUrl, sourceAsset = null) {
   const recipe = payload.recipe;
   const plan = payload.plan || {};
+  const isWebSource = /^https?:\/\//i.test(sourceUrl || '');
+  const sourceId = sourceAsset?.id || sourceUrl || `${recipe.title}-${Date.now()}`;
+  currentRecipeMeta = { title: recipe.title || 'Imported recipe', source: recipe.source || 'Recipe source', servings: recipe.servings || null, total_time: recipe.total_time || null, sourceUrl: isWebSource ? sourceUrl : '', sourceType: sourceAsset?.type || (isWebSource ? 'url' : 'file'), sourceAssetId: sourceId };
   const title = $('recipe-title');
   title.textContent = recipe.title || 'Imported recipe';
   const sourceMark = document.createElement('span');
   sourceMark.className = 'title-source';
   sourceMark.textContent = ` · ${recipe.source || 'Recipe source'}`;
   title.appendChild(sourceMark);
-  $('recipe-source-label').innerHTML = '';
-  const sourceLabel = document.createElement('strong');
-  sourceLabel.textContent = 'Source: ';
-  $('recipe-source-label').append(sourceLabel, `${recipe.source || 'Recipe source'}${recipe.servings ? ` · ${recipe.servings} servings` : ''}`);
+  renderCurrentSourceLabel();
   $('recipe-time').textContent = `◷ ${formatRecipeTime(recipe.total_time)}`;
   if (recipe.servings) applyParsedServingSize(recipe.servings, recipe.source || 'original recipe');
   else {
@@ -1180,14 +1382,14 @@ function applyImportedRecipe(payload, sourceUrl) {
     $('serving-status').textContent = 'No serving count found in this recipe. Add one if needed.';
   }
 
-  ingredients = (plan.ingredients || []).map((entry) => typeof entry === 'string' ? entry : `${entry.quantity || ''} ${entry.item || ''}`.trim()).filter(Boolean);
-  equipment = (plan.equipment || []).map((entry) => typeof entry === 'string' ? entry : `${entry.item || ''}${entry.purpose ? ` — ${entry.purpose}` : ''}`.trim()).filter(Boolean);
+  ingredients = (plan.ingredients || []).map((entry) => formatPlanEntry(entry, 'ingredient')).filter(Boolean);
+  equipment = (plan.equipment || []).map((entry) => formatPlanEntry(entry, 'equipment')).filter(Boolean);
   const plannedTasks = (plan.tasks || []).map((entry) => ({ tag:'COOK', title:entry.task || 'Cooking step', duration:entry.duration || '1 min', minutes:parseDurationMinutes(entry.duration), copy:entry.task || 'Complete this cooking step.', cue:entry.completion_cue || 'Tell me when this step is complete.' }));
   const cleanupTasks = (plan.cleanup || []).map((entry) => ({ tag:'CLEAN UP', title:'Clean up', duration:'1 min', minutes:1, copy:entry.task || 'Complete this cleanup step.', cue:entry.safety_note || 'Tell me when cleanup is complete.' }));
   tasks.splice(0, tasks.length, ...plannedTasks, ...cleanupTasks);
   current = 0;
   renderLists();
-  saveNewRecipe(recipe, sourceUrl, plan);
+  saveNewRecipe(recipe, sourceUrl, plan, sourceAsset ? { ...sourceAsset, id: sourceId } : (isWebSource ? { type: 'url', id: sourceId } : null));
   showToast(`Loaded “${recipe.title}” and rebuilt the cooking plan.`);
 }
 
