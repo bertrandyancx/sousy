@@ -182,7 +182,7 @@ def parse_source(source_type: str, source_value: str) -> dict:
         api_key = os.environ.get("PORTKEY_API_KEY")
         if not api_key:
             return {"servings": None, "source": "photo"}
-        client = OpenAI(api_key=api_key, base_url="https://api.portkey.ai/v1")
+        client = OpenAI(api_key=api_key, base_url="https://api.portkey.ai/v1", timeout=90.0, max_retries=0)
         response = client.chat.completions.create(
             model="gpt-6-luna",
             messages=[
@@ -293,7 +293,7 @@ def plan_image_with_luna(image: str, preferences: dict) -> dict:
     api_key = os.environ.get("PORTKEY_API_KEY")
     if not api_key:
         raise RuntimeError("PORTKEY_API_KEY is not configured")
-    client = OpenAI(api_key=api_key, base_url="https://api.portkey.ai/v1")
+    client = OpenAI(api_key=api_key, base_url="https://api.portkey.ai/v1", timeout=90.0, max_retries=0)
     response = client.chat.completions.create(
         model="gpt-6-luna",
         messages=[
@@ -321,7 +321,7 @@ def plan_with_luna(recipe: str, preferences: dict) -> dict:
     if not api_key:
         raise RuntimeError("PORTKEY_API_KEY is not configured")
 
-    client = OpenAI(api_key=api_key, base_url="https://api.portkey.ai/v1")
+    client = OpenAI(api_key=api_key, base_url="https://api.portkey.ai/v1", timeout=90.0, max_retries=0)
     prompt = {
         "recipe": recipe,
         "preferences": preferences,

@@ -1075,6 +1075,7 @@ function readImageAsJpegDataUrl(file) {
 
 function plannerErrorMessage(error, fallback) {
   const details = error?.message || fallback;
+  if (error?.name === 'AbortError') return 'The PDF planner took too long to respond. Try a smaller PDF or upload a clear picture of the recipe.';
   if (/PORTKEY_API_KEY|planner is not configured/i.test(details)) return 'Recipe planning is not configured on this Render service. Add PORTKEY_API_KEY in Render → Environment.';
   if (/failed to fetch|network|server/i.test(details)) return 'Sous-easy could not reach the recipe server. Check that the Render service is live and try again.';
   return details;
@@ -1085,11 +1086,14 @@ async function importPdfRecipe(file) {
   const originalLabel = button.innerHTML;
   button.innerHTML = 'Extracting PDF and rebuilding plan…';
   $('serving-status').textContent = 'Reading the recipe text from the PDF…';
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), 150000);
   try {
     const pdf = await readFileAsDataUrl(file);
     const response = await fetch('/api/analyze-pdf', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
+      signal: controller.signal,
       body: JSON.stringify({ pdf, preferences: { servings:$('servings').value, skill:$('skill')?.value || 'New to cooking', stove_scale:$('stove-scale')?.value || '1–10', modifications:$('modifications')?.value.trim() || '' } }),
     });
     const result = await response.json().catch(() => ({}));
@@ -1101,6 +1105,7 @@ async function importPdfRecipe(file) {
     $('serving-status').textContent = message;
     showToast(message);
   } finally {
+    window.clearTimeout(timeout);
     button.innerHTML = originalLabel;
   }
 }
