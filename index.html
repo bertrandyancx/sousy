@@ -23,8 +23,19 @@
     <link rel="stylesheet" href="upload-styles.css" />
     <link rel="stylesheet" href="voice-styles.css" />
     <link rel="stylesheet" href="settings-detail-styles.css" />
+    <link rel="stylesheet" href="onboarding-styles.css" />
   </head>
   <body>
+    <section class="onboarding-screen" id="onboarding-screen" hidden>
+      <div class="onboarding-card paper-texture">
+        <div class="auth-brand"><span class="brand-mark">✿</span><span>Sousy</span></div>
+        <p class="eyebrow">YOUR AI COOKING COMPANION</p>
+        <h1>Meet Sousy.</h1>
+        <p class="onboarding-intro">An AI companion that outsources all of the thinking when you cook.</p>
+        <div class="onboarding-steps"><article><span>01</span><div><h3>Find recipes</h3><p>Discover something you want to make.</p></div></article><article><span>02</span><div><h3>Upload</h3><p>Give Sousy the recipe as a URL, PDF, or picture.</p></div></article><article><span>03</span><div><h3>Let Sousy handle everything else</h3><p>Ingredients, equipment, timing, instructions, safety, and cleanup.</p></div></article></div>
+        <button class="primary-button" id="finish-onboarding">Start cooking with Sousy <span>→</span></button>
+      </div>
+    </section>
     <section class="auth-screen" id="auth-screen" hidden>
       <div class="auth-card paper-texture">
         <div class="auth-brand"><span class="brand-mark">✿</span><span>Sousy</span></div>

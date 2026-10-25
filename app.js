@@ -634,6 +634,19 @@ function showAuthScreen() {
 
 function hideAuthScreen() { $('auth-screen').hidden = true; }
 
+function showOnboardingScreen(user) {
+  const key = `sousy-onboarding-complete-${user?.id || 'guest'}`;
+  if (localStorage.getItem(key)) return;
+  $('onboarding-screen').dataset.userKey = key;
+  $('onboarding-screen').hidden = false;
+}
+
+function hideOnboardingScreen() {
+  const screen = $('onboarding-screen');
+  if (screen.dataset.userKey) localStorage.setItem(screen.dataset.userKey, 'true');
+  screen.hidden = true;
+}
+
 async function submitAuthScreen() {
   if (!supabaseClient) { showToast('Supabase accounts are not configured yet.'); return; }
   const signup = authScreenMode === 'signup';
@@ -673,6 +686,10 @@ function initializeAuthScreen() {
   setAuthScreenMode('signin');
 }
 
+function initializeOnboarding() {
+  $('finish-onboarding').addEventListener('click', hideOnboardingScreen);
+}
+
 function hasRealAccount() { return Boolean(supabaseClient && authUser); }
 
 function friendlyAuthError(error) {
@@ -690,6 +707,7 @@ async function loadAuthenticatedProfile(user) {
   if (data?.avatar_url) applyProfilePhoto(data.avatar_url);
   populateProfileForm(data || {}, user);
   hideAuthScreen();
+  showOnboardingScreen(user);
   await loadFollowLists();
 }
 
@@ -900,6 +918,7 @@ function initializeProfileMenu() {
         if (error) { showToast('Sign out failed. Please try again.'); return; }
       }
       authUser = null;
+      hideOnboardingScreen();
       localStorage.removeItem('sousy-profile');
       localStorage.removeItem('sousy-profile-photo');
       setProfile('Bertrand', '@homecook');
@@ -930,6 +949,7 @@ initializeProfileMenu();
 initializeProfileEditor();
 $('close-mic-warning').addEventListener('click', () => { $('mic-warning').hidden = true; showToast('Manual mode on — tap “I’m done” after every action.'); });
 initializeAuthScreen();
+initializeOnboarding();
 showAuthScreen();
 initializeSupabase();
 
