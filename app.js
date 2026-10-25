@@ -617,10 +617,10 @@ async function loadAuthenticatedProfile(user) {
   if (data?.avatar_url) applyProfilePhoto(data.avatar_url);
   populateProfileForm(data || {}, user);
   hideAuthScreen();
-  await loadFriendRequests();
+  await loadFollowLists();
 }
 
-function renderRealFriendRows(profiles) {
+function renderRealFriendRows(profiles, followingIds = new Set()) {
   const list = $('friend-list');
   if (!profiles.length) {
     list.innerHTML = '<p class="feed-note">No cooks found. Try another username.</p>';
@@ -629,9 +629,10 @@ function renderRealFriendRows(profiles) {
   list.innerHTML = profiles.map((profile) => {
     const name = profile.display_name || profile.username;
     const initial = escapeInstructionHtml(name.charAt(0).toUpperCase());
-    return `<article class="friend-row"><div class="friend-avatar">${initial}</div><div class="friend-info"><strong>${escapeInstructionHtml(name)}</strong><p>@${escapeInstructionHtml(profile.username)}</p></div><button class="follow-button" data-real-friend-id="${profile.id}">Add friend</button></article>`;
+    const following = followingIds.has(profile.id);
+    return `<article class="friend-row"><div class="friend-avatar">${initial}</div><div class="friend-info"><strong>${escapeInstructionHtml(name)}</strong><p>@${escapeInstructionHtml(profile.username)}</p></div><button class="follow-button${following ? ' following' : ''}" data-real-friend-id="${profile.id}" data-following="${following}">${following ? 'Following' : 'Follow'}</button></article>`;
   }).join('');
-  list.querySelectorAll('[data-real-friend-id]').forEach((button) => button.addEventListener('click', () => sendFriendRequest(button.dataset.realFriendId, button)));
+  list.querySelectorAll('[data-real-friend-id]').forEach((button) => button.addEventListener('click', () => toggleRealFollow(button.dataset.realFriendId, button, button.dataset.following !== 'true')));
 }
 
 async function searchRealFriends(query) {
@@ -640,21 +641,57 @@ async function searchRealFriends(query) {
   if (safeQuery) request = request.or(`username.ilike.%${safeQuery}%,display_name.ilike.%${safeQuery}%`);
   const { data, error } = await request;
   if (error) { showToast('I could not search cooks right now.'); return; }
-  renderRealFriendRows(data || []);
+  const relationship = await supabaseClient.from('follows').select('following_id').eq('follower_id', authUser.id);
+  const followingIds = new Set((relationship.data || []).map((row) => row.following_id));
+  renderRealFriendRows(data || [], followingIds);
   showToast(data?.length ? `${data.length} cook${data.length === 1 ? '' : 's'} found.` : 'No cooks found yet.');
 }
 
-async function sendFriendRequest(receiverId, button) {
+async function toggleRealFollow(targetId, button, shouldFollow) {
   button.disabled = true;
-  const { error } = await supabaseClient.from('friend_requests').insert({ sender_id: authUser.id, receiver_id: receiverId });
+  const result = shouldFollow
+    ? await supabaseClient.from('follows').insert({ follower_id: authUser.id, following_id: targetId })
+    : await supabaseClient.from('follows').delete().eq('follower_id', authUser.id).eq('following_id', targetId);
+  const { error } = result;
   if (error) {
     button.disabled = false;
-    showToast(error.code === '23505' ? 'A request already exists.' : 'I could not send that request.');
+    showToast(error.code === '23505' ? 'You already follow this cook.' : 'I could not update that follow.');
     return;
   }
-  button.textContent = 'Requested';
-  showToast('Friend request sent.');
+  button.dataset.following = String(shouldFollow);
+  button.classList.toggle('following', shouldFollow);
+  button.textContent = shouldFollow ? 'Following' : 'Follow';
+  button.disabled = false;
+  await loadFollowLists();
+  showToast(shouldFollow ? 'Following this cook.' : 'Unfollowed.');
 }
+
+async function profilesForIds(ids) {
+  if (!ids.length) return [];
+  const { data } = await supabaseClient.from('profiles').select('id,username,display_name,avatar_url').in('id', ids);
+  return data || [];
+}
+
+function renderNetworkList(elementId, profiles, canUnfollow = false) {
+  const list = $(elementId);
+  if (!list) return;
+  list.innerHTML = profiles.length ? profiles.map((profile) => `<article class="friend-row"><div class="friend-avatar">${escapeInstructionHtml((profile.display_name || profile.username).charAt(0).toUpperCase())}</div><div class="friend-info"><strong>${escapeInstructionHtml(profile.display_name || profile.username)}</strong><p>@${escapeInstructionHtml(profile.username)}</p></div>${canUnfollow ? `<button class="follow-button following" data-network-follow="${profile.id}">Following</button>` : `<button class="follow-button" data-network-follow="${profile.id}">Follow</button>`}</article>`).join('') : '<p class="feed-note">No cooks here yet.</p>';
+  list.querySelectorAll('[data-network-follow]').forEach((button) => button.addEventListener('click', () => toggleRealFollow(button.dataset.networkFollow, button, !canUnfollow)));
+}
+
+async function loadFollowLists() {
+  if (!hasRealAccount()) return;
+  const followingResult = await supabaseClient.from('follows').select('following_id').eq('follower_id', authUser.id);
+  const followersResult = await supabaseClient.from('follows').select('follower_id').eq('following_id', authUser.id);
+  const followingProfiles = await profilesForIds((followingResult.data || []).map((row) => row.following_id));
+  const followerProfiles = await profilesForIds((followersResult.data || []).map((row) => row.follower_id));
+  $('following-count').textContent = String(followingProfiles.length);
+  $('followers-count').textContent = String(followerProfiles.length);
+  $('friend-count').textContent = `${followingProfiles.length} following`;
+  renderNetworkList('following-list', followingProfiles, true);
+  renderNetworkList('followers-list', followerProfiles, false);
+}
+
 
 async function loadFriendRequests() {
   const container = $('friend-requests-list');
@@ -707,11 +744,12 @@ function initializeSocialInteractions() {
   }));
 
   document.querySelectorAll('[data-follow]').forEach((button) => button.addEventListener('click', () => {
+    if (hasRealAccount()) { toggleRealFollow(button.dataset.follow, button, !button.classList.contains('following')); return; }
     const isFollowing = button.classList.toggle('following');
     button.textContent = isFollowing ? 'Following' : 'Follow';
     const count = Number(($('friend-count').textContent.match(/\d+/) || ['0'])[0]) + (isFollowing ? 1 : -1);
     $('friend-count').textContent = `${count} following`;
-    showToast(isFollowing ? 'Added to your cooking circle.' : 'Removed from your cooking circle.');
+    showToast(isFollowing ? 'Following this cook.' : 'Unfollowed.');
   }));
   document.querySelectorAll('[data-accept]').forEach((button) => button.addEventListener('click', () => { button.classList.add('accepted'); button.textContent = 'Accepted'; showToast('Friend request accepted.'); }));
   $('find-friend-button').addEventListener('click', async () => {

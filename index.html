@@ -19,6 +19,7 @@
     <link rel="stylesheet" href="preview-styles.css" />
     <link rel="stylesheet" href="shopping-styles.css" />
     <link rel="stylesheet" href="auth-styles.css" />
+    <link rel="stylesheet" href="network-styles.css" />
   </head>
   <body>
     <section class="auth-screen" id="auth-screen" hidden>
@@ -101,10 +102,12 @@
         </section>
 
         <section class="content-view" id="friends-view" hidden>
-          <div class="view-heading"><div><p class="eyebrow">YOUR COOKING CIRCLE</p><h2>Find friends</h2><p>Follow cooks whose recipes make you want to get in the kitchen.</p></div><span class="saved-count" id="friend-count">2 following</span></div>
+          <div class="view-heading"><div><p class="eyebrow">YOUR COOKING CIRCLE</p><h2>Find friends</h2><p>Follow cooks whose recipes make you want to get in the kitchen.</p></div><span class="saved-count" id="friend-count">0 following</span></div>
+          <div class="network-stats"><div><strong id="following-count">0</strong><span>Following</span></div><div><strong id="followers-count">0</strong><span>Followers</span></div></div>
           <div class="friend-search"><span>⌕</span><input id="friend-search-input" placeholder="Search by username or email" /><button id="find-friend-button">Find</button></div>
           <div class="friend-section"><div class="section-heading compact-heading"><div><p class="eyebrow">SUGGESTED COOKS</p><h3>People you may like</h3></div></div><div id="friend-list"><article class="friend-row"><div class="friend-avatar avatar-mara">M</div><div class="friend-info"><strong>Mara Chen</strong><p>@mara · cozy baking and family recipes</p></div><button class="follow-button" data-follow="mara">Follow</button></article><article class="friend-row"><div class="friend-avatar avatar-noah">N</div><div class="friend-info"><strong>Noah Williams</strong><p>@noah · fast dinners and fewer dishes</p></div><button class="follow-button" data-follow="noah">Follow</button></article><article class="friend-row"><div class="friend-avatar avatar-lina">L</div><div class="friend-info"><strong>Lina Patel</strong><p>@linacooks · bright vegetables and spice</p></div><button class="follow-button" data-follow="lina">Follow</button></article></div></div>
-          <div class="friend-section"><div class="section-heading compact-heading"><div><p class="eyebrow">YOUR NETWORK</p><h3>Friend requests</h3></div></div><div id="friend-requests-list"><div class="request-row"><div class="friend-avatar avatar-eli">E</div><div class="friend-info"><strong>Eli Brooks</strong><p>@elibakes wants to follow you</p></div><button class="accept-button" data-accept="eli">Accept</button></div></div></div>
+          <div class="friend-section"><div class="section-heading compact-heading"><div><p class="eyebrow">FOLLOWING</p><h3>Cooks you follow</h3></div></div><div id="following-list"><p class="feed-note">Your following list will appear here.</p></div></div>
+          <div class="friend-section"><div class="section-heading compact-heading"><div><p class="eyebrow">FOLLOWERS</p><h3>Cooks following you</h3></div></div><div id="followers-list"><p class="feed-note">Your followers will appear here.</p></div></div>
         </section>
 
         <section class="content-view" id="profile-view" hidden>

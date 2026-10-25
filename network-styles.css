@@ -1,0 +1,1 @@
+.network-stats{display:flex;gap:10px;margin:-2px 0 17px}.network-stats>div{flex:1;background:var(--paper);border:1px solid var(--line);border-radius:15px;padding:12px 14px}.network-stats strong{display:block;font-family:Fraunces,serif;font-size:22px;color:var(--ink)}.network-stats span{font-size:10px;color:var(--muted)}
