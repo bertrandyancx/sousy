@@ -111,6 +111,13 @@ function taskIngredientHtml(task) {
   return `<div class="task-ingredients"><strong>Use exactly</strong><ul>${task.ingredients.map((item) => `<li>${formatInstruction(item)}</li>`).join('')}</ul></div>`;
 }
 
+function expandPlanEntries(entries) {
+  return (entries || []).flatMap((entry) => {
+    if (!Array.isArray(entry?.substeps) || !entry.substeps.length) return [entry];
+    return entry.substeps.map((substep) => ({ ...entry, ...substep }));
+  });
+}
+
 function formatStationItem(item) {
   const parts = String(item || '').split(/\s+—\s+/, 2);
   const main = escapeInstructionHtml(parts[0]);
@@ -1433,8 +1440,17 @@ function applyImportedRecipe(payload, sourceUrl, sourceAsset = null) {
 
   ingredients = (plan.ingredients || []).map((entry) => formatPlanEntry(entry, 'ingredient')).filter(Boolean);
   equipment = (plan.equipment || []).map((entry) => formatPlanEntry(entry, 'equipment')).filter(Boolean);
-  const plannedTasks = (plan.tasks || []).map((entry) => ({ tag:entry.stage || entry.tag || 'COOK', title:taskTitle(entry), duration:entry.duration || '1 min', minutes:parseDurationMinutes(entry.duration), ingredients:formatTaskIngredients(entry), copy:taskText(entry), cue:entry.completion_cue || entry.when_done || 'Tell me when this step is complete.' }));
-  const cleanupTasks = (plan.cleanup || []).map((entry) => ({ tag:'CLEAN UP', title:taskTitle(entry) === 'Cooking step' ? 'Clean up' : taskTitle(entry), duration:entry.duration || '1 min', minutes:parseDurationMinutes(entry.duration), ingredients:formatTaskIngredients(entry), copy:taskText(entry), cue:entry.safety_note || entry.completion_cue || 'Tell me when cleanup is complete.' }));
+  const plannedTasks = expandPlanEntries(plan.tasks).map((entry) => ({ tag:entry.stage || entry.tag || 'COOK', title:taskTitle(entry), duration:entry.duration || '1 min', minutes:parseDurationMinutes(entry.duration), ingredients:formatTaskIngredients(entry), copy:taskText(entry), cue:entry.completion_cue || entry.when_done || 'Tell me when this step is complete.' }));
+  const cleanupEntries = expandPlanEntries(plan.cleanup);
+  const cleanupTasks = cleanupEntries.length ? [{
+    tag: 'CLEAN UP',
+    title: 'Clean up the kitchen',
+    duration: `${cleanupEntries.reduce((sum, entry) => sum + parseDurationMinutes(entry.duration), 0) || 1} min`,
+    minutes: cleanupEntries.reduce((sum, entry) => sum + parseDurationMinutes(entry.duration), 0) || 1,
+    ingredients: [...new Set(cleanupEntries.flatMap((entry) => formatTaskIngredients(entry)))],
+    copy: cleanupEntries.map((entry) => taskText(entry)).join(' '),
+    cue: cleanupEntries.map((entry) => entry.safety_note || entry.completion_cue).filter(Boolean).join(' ') || 'The kitchen is clean, the stove is off, and leftovers are stored safely.',
+  }] : [];
   tasks.splice(0, tasks.length, ...plannedTasks, ...cleanupTasks);
   current = 0;
   renderLists();

@@ -297,8 +297,8 @@ def plan_image_with_luna(image: str, preferences: dict) -> dict:
     response = client.chat.completions.create(
         model="gpt-6-luna",
         messages=[
-            {"role": "system", "content": "You are Sous-easy's recipe planner. Read the recipe image, preserve its measurements, and return the same structured JSON plan fields as the text planner. Do not guess missing measurements. Every cooking task must read like a concise recipe method step and must repeat exact quantities for ingredients used in that step."},
-            {"role": "user", "content": [{"type": "text", "text": json.dumps({"preferences": preferences, "required_output": {"servings": "number or null from the image", "ingredients": "array with exact quantities", "equipment": "array", "tasks": "ordered recipe-method steps; each has title, task, ingredients_used with exact quantities, duration, and completion_cue", "cleanup": "array", "feasibility": "object"}})}, {"type": "image_url", "image_url": {"url": image}}]},
+            {"role": "system", "content": "You are Sous-easy's recipe planner. Read the recipe image, preserve its measurements, and return the same structured JSON plan fields as the text planner. Do not guess missing measurements. Every cooking task must be one atomic recipe-method action, with exact quantities repeated for ingredients used in that action. Split combined actions such as making a sauce or searing into separate sequential steps. Return cleanup as one consolidated final step."},
+            {"role": "user", "content": [{"type": "text", "text": json.dumps({"preferences": preferences, "required_output": {"servings": "number or null from the image", "ingredients": "array with exact quantities", "equipment": "array", "tasks": "ordered atomic recipe-method steps; each has title, one-action task, ingredients_used with exact quantities, duration, and completion_cue", "cleanup": "one consolidated final cleanup step", "feasibility": "object"}})}, {"type": "image_url", "image_url": {"url": image}}]},
         ],
     )
     return parse_model_json(response.choices[0].message.content)
@@ -328,8 +328,8 @@ def plan_with_luna(recipe: str, preferences: dict) -> dict:
         "required_output": {
             "equipment": "array of detailed equipment with purpose",
             "ingredients": "array with quantity, preparation, and allergen notes",
-            "tasks": "ordered recipe-method steps with title, exact ingredients_used quantities, duration, heat level, equipment, dependencies, completion cue, and safety banner",
-            "cleanup": "ordered cleanup tasks",
+            "tasks": "ordered atomic recipe-method steps with title, exact ingredients_used quantities, duration, heat level, equipment, dependencies, completion cue, and safety banner; never combine separate actions",
+            "cleanup": "one consolidated final cleanup step containing all cleanup actions",
             "feasibility": "timing assessment and assumptions",
         },
     }
@@ -347,7 +347,11 @@ def plan_with_luna(recipe: str, preferences: dict) -> dict:
                     "the exact quantity and unit copied from the source. Never write 'some', 'as needed', "
                     "or 'add the ingredients' when the source provides a measurement. Preserve the source's "
                     "units and amounts. If the source truly gives no quantity, say 'amount not specified in source' "
-                    "rather than guessing. Include exact stove heat or temperature and equipment in the task text."
+                    "rather than guessing. Include exact stove heat or temperature and equipment in the task text. "
+                    "Each task must contain one main action only. Do not combine actions with 'then', 'and then', "
+                    "or a list of separate verbs; create another task instead. Write complete instructions such as "
+                    "'Take 1 tablespoon of soy sauce and mix it with 2 tablespoons of water in the small bowl.' "
+                    "Return cleanup as one final task, not several cleanup tasks."
                 ),
             },
             {"role": "user", "content": json.dumps(prompt)},
