@@ -415,9 +415,9 @@ function initializeSourceTabs() {
     $('pdf-name').textContent = file ? `${file.name} ready to analyze.` : 'Choose a PDF to extract the recipe from.';
     if (!file) return;
     $('serving-status').textContent = 'Reading serving size from the original PDF…';
-    const text = await file.text();
-    parseServingSource(`${file.name}\n${text}`, 'PDF');
-    if (!parseServingSize(text)) requestParsedServing('pdf', text, 'PDF');
+    const filenameServing = parseServingSize(file.name);
+    if (filenameServing) applyParsedServingSize(filenameServing, 'PDF filename');
+    else $('serving-status').textContent = 'Serving size will be parsed when the PDF is analyzed.';
   });
   $('recipe-photo').addEventListener('change', (event) => {
     const file = event.target.files[0];
@@ -1023,7 +1023,7 @@ async function updatePlanFromSource() {
   if (activeSourceType === 'pdf') {
     const file = $('recipe-pdf').files[0];
     if (!file) { showToast('Choose a PDF first.'); return; }
-    await importTextRecipe(await file.text(), file.name, 'Uploaded PDF');
+    await importPdfRecipe(file);
     return;
   }
   if (activeSourceType === 'photo') {
@@ -1039,16 +1039,61 @@ async function updatePlanFromSource() {
   await importRecipeFromUrl(source);
 }
 
+function readFileAsDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(new Error('The PDF could not be read on this device.'));
+    reader.readAsDataURL(file);
+  });
+}
+
+function plannerErrorMessage(error, fallback) {
+  const details = error?.message || fallback;
+  if (/PORTKEY_API_KEY|planner is not configured/i.test(details)) return 'Recipe planning is not configured on this Render service. Add PORTKEY_API_KEY in Render → Environment.';
+  if (/failed to fetch|network|server/i.test(details)) return 'Sous-easy could not reach the recipe server. Check that the Render service is live and try again.';
+  return details;
+}
+
+async function importPdfRecipe(file) {
+  const button = $('analyze-plan');
+  const originalLabel = button.innerHTML;
+  button.innerHTML = 'Extracting PDF and rebuilding plan…';
+  $('serving-status').textContent = 'Reading the recipe text from the PDF…';
+  try {
+    const pdf = await readFileAsDataUrl(file);
+    const response = await fetch('/api/analyze-pdf', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ pdf, preferences: { servings:$('servings').value, skill:$('skill')?.value || 'New to cooking', stove_scale:$('stove-scale')?.value || '1–10', modifications:$('modifications')?.value.trim() || '' } }),
+    });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(result.error || `PDF analysis failed (${response.status})`);
+    const title = file.name.replace(/\.pdf$/i, '') || 'Uploaded PDF';
+    applyImportedRecipe({ recipe: { title, source: 'Uploaded PDF', servings: parseServingSize(result.text || ''), total_time: null }, plan: result.plan }, file.name);
+  } catch (error) {
+    const message = plannerErrorMessage(error, 'The PDF could not be imported.');
+    $('serving-status').textContent = message;
+    showToast(message);
+  } finally {
+    button.innerHTML = originalLabel;
+  }
+}
+
 async function importTextRecipe(text, title, source) {
   const button = $('analyze-plan');
   const originalLabel = button.innerHTML;
   button.innerHTML = 'Reading recipe and rebuilding plan…';
   try {
-    const response = await fetch('/api/analyze', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ recipe_text:text, preferences:{ servings:$('servings').value, skill:$('skill')?.value || 'New to cooking', stove_scale:$('stove-scale')?.value || '1–10' } }) });
-    if (!response.ok) throw new Error('Recipe analysis failed');
-    const result = await response.json();
+    const response = await fetch('/api/analyze', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ recipe_text:text, preferences:{ servings:$('servings').value, skill:$('skill')?.value || 'New to cooking', stove_scale:$('stove-scale')?.value || '1–10', modifications:$('modifications')?.value.trim() || '' } }) });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(result.error || 'Recipe analysis failed');
     applyImportedRecipe({ recipe:{ title, source, servings:parseServingSize(text), total_time:null }, plan:result.plan }, title);
-  } catch (error) { showToast('I could not read that file. Try a clearer recipe source.'); }
+  } catch (error) {
+    const message = plannerErrorMessage(error, 'I could not read that file. Try a clearer recipe source.');
+    $('serving-status').textContent = message;
+    showToast(message);
+  }
   finally { button.innerHTML = originalLabel; }
 }
 

@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import json
+import base64
+from io import BytesIO
 import os
 import re
 import ssl
@@ -76,6 +78,29 @@ class SousEasyHandler(SimpleHTTPRequestHandler):
 
     def do_POST(self):  # noqa: N802
         path = urlparse(self.path).path
+        if path == "/api/analyze-pdf":
+            try:
+                if not os.environ.get("PORTKEY_API_KEY"):
+                    self._json(503, {"error": "Recipe planner is not configured: PORTKEY_API_KEY is missing"})
+                    return
+                size = int(self.headers.get("Content-Length", "0"))
+                request = json.loads(self.rfile.read(size) or "{}")
+                encoded_pdf = str(request.get("pdf", ""))
+                if "," in encoded_pdf:
+                    encoded_pdf = encoded_pdf.split(",", 1)[1]
+                raw_pdf = base64.b64decode(encoded_pdf, validate=True)
+                from pypdf import PdfReader
+
+                reader = PdfReader(BytesIO(raw_pdf))
+                recipe_text = "\n".join(page.extract_text() or "" for page in reader.pages).strip()
+                if len(recipe_text) < 20:
+                    self._json(422, {"error": "I could not extract readable text from that PDF. Try a text-based PDF or upload a picture of the recipe."})
+                    return
+                plan = plan_with_luna(recipe_text[:100000], request.get("preferences", {}))
+                self._json(200, {"text": recipe_text[:100000], "plan": plan})
+            except Exception as exc:
+                self._json(500, {"error": str(exc)})
+            return
         if path == "/api/parse-source":
             try:
                 size = int(self.headers.get("Content-Length", "0"))
@@ -104,6 +129,9 @@ class SousEasyHandler(SimpleHTTPRequestHandler):
             return
         if path == "/api/analyze-image":
             try:
+                if not os.environ.get("PORTKEY_API_KEY"):
+                    self._json(503, {"error": "Recipe planner is not configured: PORTKEY_API_KEY is missing"})
+                    return
                 size = int(self.headers.get("Content-Length", "0"))
                 request = json.loads(self.rfile.read(size) or "{}")
                 plan = plan_image_with_luna(request.get("image", ""), request.get("preferences", {}))
@@ -116,6 +144,9 @@ class SousEasyHandler(SimpleHTTPRequestHandler):
             return
 
         try:
+            if not os.environ.get("PORTKEY_API_KEY"):
+                self._json(503, {"error": "Recipe planner is not configured: PORTKEY_API_KEY is missing"})
+                return
             size = int(self.headers.get("Content-Length", "0"))
             request = json.loads(self.rfile.read(size) or "{}")
             recipe = str(request.get("recipe_text", "")).strip()
