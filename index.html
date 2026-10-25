@@ -18,8 +18,25 @@
     <link rel="stylesheet" href="checklist-styles.css" />
     <link rel="stylesheet" href="preview-styles.css" />
     <link rel="stylesheet" href="shopping-styles.css" />
+    <link rel="stylesheet" href="auth-styles.css" />
   </head>
   <body>
+    <section class="auth-screen" id="auth-screen" hidden>
+      <div class="auth-card paper-texture">
+        <div class="auth-brand"><span class="brand-mark">✿</span><span>Sousy</span></div>
+        <p class="eyebrow" id="auth-screen-eyebrow">WELCOME BACK</p>
+        <h1 id="auth-screen-title">Good cooking,<br /><em>no thinking.</em></h1>
+        <p class="auth-intro" id="auth-screen-copy">Sign in to return to your cooking circle, saved recipes, and guided plans.</p>
+        <div class="auth-screen-tabs"><button class="auth-screen-tab active" data-auth-mode="signin">Sign in</button><button class="auth-screen-tab" data-auth-mode="signup">Create account</button></div>
+        <button class="google-button" id="auth-google"><span>G</span> Continue with Google</button>
+        <div class="or-divider"><span>or use email</span></div>
+        <label id="auth-username-field" hidden>Username<input id="auth-username" autocomplete="username" placeholder="Choose a username" /></label>
+        <label>Email<input id="auth-email" type="email" autocomplete="email" placeholder="you@example.com" /></label>
+        <label>Password<input id="auth-password" type="password" autocomplete="current-password" placeholder="At least 8 characters" /></label>
+        <button class="primary-button" id="auth-submit">Sign in to Sousy <span>→</span></button>
+        <button class="auth-continue" id="auth-continue">Continue without an account</button>
+      </div>
+    </section>
     <div class="app-shell">
       <header class="topbar">
         <div class="brand-lockup"><span class="brand-mark">✿</span><span>Sousy</span></div>

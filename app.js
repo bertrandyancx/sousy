@@ -61,6 +61,7 @@ let importRequestId = 0;
 let importController = null;
 let supabaseClient = null;
 let authUser = null;
+let authScreenMode = 'signin';
 
 function renderLists() {
   $('ingredient-list').innerHTML = ingredients.length ? ingredients.map((item, index) => `<li><label class="check-item"><input type="checkbox" class="station-check" data-station="ingredient-${index}" /><span>${item}</span></label></li>`).join('') : '<li class="empty-list">Import a recipe to see ingredients.</li>';
@@ -464,6 +465,56 @@ function setProfile(name, handle) {
   localStorage.setItem('sousy-profile', JSON.stringify({ name, handle }));
 }
 
+function setAuthScreenMode(mode) {
+  authScreenMode = mode;
+  const signup = mode === 'signup';
+  document.querySelectorAll('[data-auth-mode]').forEach((tab) => tab.classList.toggle('active', tab.dataset.authMode === mode));
+  $('auth-username-field').hidden = !signup;
+  $('auth-screen-eyebrow').textContent = signup ? 'JOIN THE COOKING CIRCLE' : 'WELCOME BACK';
+  $('auth-screen-title').innerHTML = signup ? 'Make room for<br /><em>more good food.</em>' : 'Good cooking,<br /><em>no thinking.</em>';
+  $('auth-screen-copy').textContent = signup ? 'Create your Sousy account to find friends, save recipes, and keep your cooking progress close.' : 'Sign in to return to your cooking circle, saved recipes, and guided plans.';
+  $('auth-submit').innerHTML = signup ? 'Create my Sousy account <span>→</span>' : 'Sign in to Sousy <span>→</span>';
+  $('auth-password').autocomplete = signup ? 'new-password' : 'current-password';
+}
+
+function showAuthScreen() {
+  setAuthScreenMode('signin');
+  $('auth-screen').hidden = false;
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+  window.setTimeout(() => $('auth-email').focus(), 50);
+}
+
+function hideAuthScreen() { $('auth-screen').hidden = true; }
+
+async function submitAuthScreen() {
+  if (!supabaseClient) { showToast('Supabase accounts are not configured yet.'); return; }
+  const signup = authScreenMode === 'signup';
+  const email = $('auth-email').value.trim();
+  const password = $('auth-password').value;
+  const username = $('auth-username').value.trim();
+  if (!email || !email.includes('@') || !password || (signup && !username)) { showToast(signup ? 'Add an email, username, and password.' : 'Add your email and password.'); return; }
+  if (signup && !/^[A-Za-z0-9_]{3,30}$/.test(username)) { showToast('Username must be 3–30 letters, numbers, or underscores.'); return; }
+  const result = signup
+    ? await supabaseClient.auth.signUp({ email, password, options: { data: { username, display_name: username } } })
+    : await supabaseClient.auth.signInWithPassword({ email, password });
+  if (result.error) { showToast(result.error.message); return; }
+  if (signup && !result.data.session) showToast('Check your email to confirm your account.');
+  else { hideAuthScreen(); showToast(signup ? 'Your Sousy account is ready.' : 'Welcome back to Sousy.'); }
+}
+
+function initializeAuthScreen() {
+  document.querySelectorAll('[data-auth-mode]').forEach((tab) => tab.addEventListener('click', () => setAuthScreenMode(tab.dataset.authMode)));
+  $('auth-submit').addEventListener('click', submitAuthScreen);
+  $('auth-password').addEventListener('keydown', (event) => { if (event.key === 'Enter') submitAuthScreen(); });
+  $('auth-google').addEventListener('click', async () => {
+    if (!supabaseClient) { showToast('Supabase accounts are not configured yet.'); return; }
+    const { error } = await supabaseClient.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: window.location.origin } });
+    if (error) showToast(error.message);
+  });
+  $('auth-continue').addEventListener('click', hideAuthScreen);
+  setAuthScreenMode('signin');
+}
+
 function hasRealAccount() { return Boolean(supabaseClient && authUser); }
 
 async function loadAuthenticatedProfile(user) {
@@ -474,6 +525,7 @@ async function loadAuthenticatedProfile(user) {
   const username = data?.username || metadata.username || `cook_${user.id.slice(0, 8)}`;
   setProfile(displayName, `@${username.replace(/^@/, '')}`);
   if (data?.avatar_url) applyProfilePhoto(data.avatar_url);
+  hideAuthScreen();
   await loadFriendRequests();
 }
 
@@ -641,6 +693,7 @@ function initializeProfileMenu() {
       setProfile('Bertrand', '@homecook');
       $('profile-menu').hidden = true;
       $('profile-button').setAttribute('aria-expanded', 'false');
+      showAuthScreen();
       showToast('Signed out.');
     }
   }));
@@ -662,6 +715,7 @@ function applyProfilePhoto(source) {
 
 initializeProfileMenu();
 $('close-mic-warning').addEventListener('click', () => { $('mic-warning').hidden = true; showToast('Manual mode on — tap “I’m done” after every action.'); });
+initializeAuthScreen();
 initializeSupabase();
 
 async function updatePlanFromSource() {
