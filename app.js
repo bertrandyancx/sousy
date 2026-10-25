@@ -325,15 +325,33 @@ function renderSavedInspirations() {
 
 function renderNewRecipes() {
   $('empty-new-recipes').hidden = newRecipes.length > 0;
-  $('new-recipe-list').innerHTML = newRecipes.map((recipe) => `<article class="new-recipe-saved"><div class="recipe-mini-icon">🍽</div><div><h3>${escapeInstructionHtml(recipe.title)}</h3><p>Source: ${escapeInstructionHtml(recipe.source)}${recipe.servings ? ` · ${recipe.servings} servings` : ''}</p></div></article>`).join('');
+  $('new-recipe-list').innerHTML = newRecipes.map((recipe, index) => `<article class="new-recipe-saved"><div class="recipe-mini-icon">🍽</div><div><h3>${escapeInstructionHtml(recipe.title)}</h3><p>Source: ${escapeInstructionHtml(recipe.source)}${recipe.servings ? ` · ${recipe.servings} servings` : ''}</p><button class="text-action" data-load-saved-index="${index}">Cook this recipe →</button></div></article>`).join('');
+  document.querySelectorAll('[data-load-saved-index]').forEach((button) => button.addEventListener('click', () => loadSavedRecipe(Number(button.dataset.loadSavedIndex))));
+  renderSavedRecipePicker();
 }
 
-function saveNewRecipe(recipe, sourceUrl) {
-  const saved = { id: sourceUrl || `${recipe.title}-${Date.now()}`, title: recipe.title, source: recipe.source || 'Imported recipe', servings: recipe.servings || null, ingredients: [...ingredients], sourceUrl: sourceUrl || '' };
+function saveNewRecipe(recipe, sourceUrl, plan = null) {
+  const saved = { id: sourceUrl || `${recipe.title}-${Date.now()}`, title: recipe.title, source: recipe.source || 'Imported recipe', servings: recipe.servings || null, ingredients: [...ingredients], sourceUrl: sourceUrl || '', plan };
   newRecipes = [saved, ...newRecipes.filter((item) => item.id !== saved.id)];
   localStorage.setItem('sousy-new-recipes', JSON.stringify(newRecipes));
   renderNewRecipes();
   renderShopping();
+}
+
+function renderSavedRecipePicker() {
+  const picker = $('saved-recipe-select');
+  if (!picker) return;
+  picker.innerHTML = '<option value="">Choose a saved recipe</option>' + newRecipes.map((recipe, index) => `<option value="${index}">${escapeInstructionHtml(recipe.title)}</option>`).join('');
+}
+
+function loadSavedRecipe(index) {
+  const saved = newRecipes[index];
+  if (!saved) return;
+  if (!saved.plan) { showToast('This older saved item needs to be imported again to create a cooking plan.'); return; }
+  applyImportedRecipe({ recipe: { title: saved.title, source: saved.source, servings: saved.servings, total_time: saved.plan.total_time || null }, plan: saved.plan }, saved.sourceUrl || saved.id);
+  showView('home');
+  $('setup-panel').hidden = true;
+  $('dashboard').scrollIntoView({ behavior: 'smooth' });
 }
 
 function ingredientKey(item) {
@@ -434,6 +452,16 @@ function initializeSecondaryViews() {
     $('shopping-by-recipe').hidden = tab.dataset.shoppingMode !== 'by-recipe';
   }));
   $('shopping-filter').addEventListener('input', renderShopping);
+  $('load-saved-recipe').addEventListener('click', () => {
+    const value = $('saved-recipe-select').value;
+    if (value === '') { showToast('Choose a saved recipe first.'); return; }
+    loadSavedRecipe(Number(value));
+  });
+  $('open-shopping-upload').addEventListener('click', () => {
+    showView('home');
+    $('setup-panel').hidden = false;
+    $('setup-panel').scrollIntoView({ behavior: 'smooth' });
+  });
   document.querySelectorAll('[data-save]').forEach((button) => button.addEventListener('click', () => {
     const data = { carbonara:['Simple pasta carbonara','Australia’s Best Recipes','🍝'], crumble:['Strawberry oat crumble','Mara’s family notebook','🍓'], greens:['Weeknight greens pasta','adapted from Bon Appétit','🥬'], focaccia:['Rosemary focaccia','Mara’s family notebook','🥖'], 'tomato-soup':['Cozy tomato soup','Noah’s weeknight rotation','🍲'] }[button.dataset.save];
     saveInspiration(button.dataset.save, ...data);
@@ -946,7 +974,7 @@ function applyImportedRecipe(payload, sourceUrl) {
   tasks.splice(0, tasks.length, ...plannedTasks, ...cleanupTasks);
   current = 0;
   renderLists();
-  saveNewRecipe(recipe, sourceUrl);
+  saveNewRecipe(recipe, sourceUrl, plan);
   showToast(`Loaded “${recipe.title}” and rebuilt the cooking plan.`);
 }
 

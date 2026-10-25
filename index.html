@@ -20,6 +20,7 @@
     <link rel="stylesheet" href="shopping-styles.css" />
     <link rel="stylesheet" href="auth-styles.css" />
     <link rel="stylesheet" href="network-styles.css" />
+    <link rel="stylesheet" href="upload-styles.css" />
   </head>
   <body>
     <section class="auth-screen" id="auth-screen" hidden>
@@ -62,6 +63,7 @@
           <div class="source-panel" id="source-url-panel"><label>Recipe URL<input id="recipe-source" placeholder="Paste a recipe URL" /></label><p class="field-hint">We’ll read the recipe title and show its source beside it.</p></div>
           <div class="source-panel" id="source-pdf-panel" hidden><label>Recipe PDF<input id="recipe-pdf" type="file" accept="application/pdf" /></label><p class="field-hint" id="pdf-name">Choose a PDF to extract the recipe from.</p></div>
           <div class="source-panel" id="source-photo-panel" hidden><label>Recipe picture<input id="recipe-photo" type="file" accept="image/*" capture="environment" /></label><p class="field-hint" id="photo-name">Take a photo or choose an image of the recipe.</p></div>
+          <div class="saved-picker"><label>Or choose an imported recipe from Saved<select id="saved-recipe-select"><option value="">Choose a saved recipe</option></select></label><button class="secondary-button" id="load-saved-recipe" type="button">Load saved recipe</button></div>
           <label>Servings<input id="servings" type="number" min="1" placeholder="Parsed from the recipe" /><p class="field-hint" id="serving-status">Serving size will be parsed after you import a recipe.</p></label>
           <label>Anything missing or different?<textarea id="modifications" rows="2" placeholder="Example: I do not have parmesan. Leave blank if everything is ready."></textarea></label>
           <div class="setup-note"><span>✦</span><p>We’ll only suggest a substitute if you tell us something is missing. Your plan will adjust around it.</p></div>
@@ -136,7 +138,7 @@
         </section>
 
         <section class="content-view" id="shopping-view" hidden>
-          <div class="view-heading"><div><p class="eyebrow">YOUR KITCHEN LIST</p><h2>Shopping list</h2><p>Ingredients from every recipe in New Recipes, ready for one trip to the store.</p></div><span class="saved-count" id="shopping-count">0 items</span></div>
+          <div class="view-heading"><div><p class="eyebrow">YOUR KITCHEN LIST</p><h2>Shopping list</h2><p>Ingredients from every recipe in New Recipes, ready for one trip to the store.</p></div><div class="shopping-heading-actions"><span class="saved-count" id="shopping-count">0 items</span><button class="secondary-button" id="open-shopping-upload">Upload recipe</button></div></div>
           <div class="shopping-search"><span>⌕</span><input id="shopping-filter" placeholder="Filter ingredients or recipes" /></div>
           <div class="sub-tabs" role="tablist" aria-label="Shopping list view"><button class="sub-tab active" data-shopping-mode="combined">Combine all</button><button class="sub-tab" data-shopping-mode="by-recipe">By recipe</button></div>
           <div id="shopping-combined" class="shopping-panel"></div>
