@@ -186,7 +186,7 @@ function renderLyrics() {
 }
 
 function escapeInstructionHtml(text) {
-  return text.replace(/[&<>"']/g, (character) => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#039;' }[character]));
+  return String(text ?? '').replace(/[&<>"']/g, (character) => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#039;' }[character]));
 }
 
 function formatInstruction(text) {
