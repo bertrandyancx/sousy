@@ -281,21 +281,20 @@ function finishCooking() { $('progress-bar').style.width = '100%'; $('current-ta
 
 function pauseCooking() { if (window.speechSynthesis) window.speechSynthesis.pause(); showToast('Cooking paused. Say “ready” when you want to continue.'); }
 
-function setup() { renderLists(); $('open-setup').addEventListener('click', () => { $('setup-panel').hidden = false; $('setup-panel').scrollIntoView({behavior:'smooth'}); }); $('close-setup').addEventListener('click', () => $('setup-panel').hidden = true); $('analyze-plan').addEventListener('click', () => { $('analyze-plan').textContent = 'Plan updated ✓'; showToast('Your preferences are ready for the cooking plan.'); window.setTimeout(() => { $('analyze-plan').innerHTML = 'Update my plan <span>→</span>'; }, 2200); }); $('start-cooking').addEventListener('click', startCooking); $('back-to-prep').addEventListener('click', () => { $('cook-mode').hidden = true; $('dashboard').hidden = false; stopListening(); stopTimer(); if (wakeLock) wakeLock.release(); }); $('done-button').addEventListener('click', advanceTask); $('repeat-button').addEventListener('click', () => renderTask(true)); $('pause-button').addEventListener('click', pauseCooking); $('speak-button').addEventListener('click', () => renderTask(true)); $('timer-button').addEventListener('click', startTimer); $('dismiss-warning').addEventListener('click', hideWarning); $('issue-button').addEventListener('click', () => { showWarning('Tell me what changed', 'The plan is paused. You can say “the sauce is too thick,” “I’m missing an ingredient,” or tap Resume when ready.'); pauseCooking(); }); $('wake-button').addEventListener('click', requestWakeLock); $('sound-toggle').addEventListener('click', () => { voiceOn = !voiceOn; $('sound-toggle').textContent = voiceOn ? '⌁' : '⌁̸'; showToast(voiceOn ? 'Voice instructions on.' : 'Voice instructions muted.'); }); }
+function setup() { renderLists(); $('open-setup').addEventListener('click', () => { $('setup-panel').hidden = false; $('setup-panel').scrollIntoView({behavior:'smooth'}); }); $('close-setup').addEventListener('click', () => $('setup-panel').hidden = true); $('analyze-plan').addEventListener('click', () => { $('analyze-plan').textContent = 'Plan updated ✓'; showToast('Your preferences are ready for the cooking plan.'); window.setTimeout(() => { $('analyze-plan').innerHTML = 'Update my plan <span>→</span>'; }, 2200); }); $('start-cooking').addEventListener('click', startCooking); $('back-to-prep').addEventListener('click', () => { $('cook-mode').hidden = true; $('dashboard').hidden = false; stopListening(); stopTimer(); if (wakeLock) wakeLock.release(); }); $('done-button').addEventListener('click', advanceTask); $('repeat-button').addEventListener('click', () => renderTask(true)); $('pause-button').addEventListener('click', pauseCooking); $('speak-button').addEventListener('click', () => renderTask(true)); $('timer-button').addEventListener('click', startTimer); $('dismiss-warning').addEventListener('click', hideWarning); $('issue-button').addEventListener('click', () => { showWarning('Tell me what changed', 'The plan is paused. You can say “the sauce is too thick,” “I’m missing an ingredient,” or tap Resume when ready.'); pauseCooking(); }); $('wake-button').addEventListener('click', requestWakeLock); $('sound-toggle').addEventListener('click', () => { voiceOn = !voiceOn; refreshSoundToggle(); if (!voiceOn) window.speechSynthesis?.cancel(); showToast(voiceOn ? 'Voice instructions on.' : 'Voice instructions muted.'); }); }
 
 setup();
 
 function refreshSoundToggle() {
   const icon = voiceOn
-    ? '<svg class="speaker-icon" width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9v6h4l5 4V5L8 9H4Z"/><path d="M16 9.5a4 4 0 0 1 0 5M18.5 7a7.5 7.5 0 0 1 0 10"/></svg>'
-    : '<svg class="speaker-icon" width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9v6h4l5 4V5L8 9H4Z"/><path d="m17 9 5 5m0-5-5 5"/></svg>';
+    ? '<svg class="speaker-icon" width="24" height="24" viewBox="0 0 24 24" focusable="false" aria-hidden="true"><path class="speaker-body" d="M3 9v6h4l5 4V5L7 9H3Z"/><path class="speaker-wave" d="M16 8.5a5 5 0 0 1 0 7M18.5 6a8.5 8.5 0 0 1 0 12"/></svg>'
+    : '<svg class="speaker-icon" width="24" height="24" viewBox="0 0 24 24" focusable="false" aria-hidden="true"><path class="speaker-body" d="M3 9v6h4l5 4V5L7 9H3Z"/><path class="speaker-wave" d="m16 9 5 5m0-5-5 5"/></svg>';
   $('sound-toggle').innerHTML = icon;
   $('sound-toggle').setAttribute('aria-label', voiceOn ? 'Mute voice instructions' : 'Turn voice instructions on');
   $('sound-toggle').setAttribute('aria-pressed', String(!voiceOn));
   $('sound-toggle').style.opacity = voiceOn ? '1' : '.48';
 }
 
-$('sound-toggle').addEventListener('click', refreshSoundToggle);
 refreshSoundToggle();
 
 // Navigation and secondary surfaces keep the cooking flow available without
@@ -323,7 +322,7 @@ let activeSourceType = 'url';
 
 function showView(view) {
   activeView = view;
-  const navView = ['privacy', 'voice', 'about'].includes(view) ? 'settings' : view;
+  const navView = ['privacy', 'voice', 'about', 'help'].includes(view) ? 'settings' : view;
   document.querySelectorAll('.nav-item').forEach((item) => item.classList.toggle('active', item.dataset.view === navView));
   document.querySelectorAll('.content-view').forEach((item) => { item.hidden = item.id !== `${view}-view`; });
   document.querySelectorAll('.home-only').forEach((item) => { if (view !== 'home' || (cookingActive && item.id !== 'setup-panel')) item.hidden = true; else if (item.id !== 'setup-panel') item.hidden = false; });
@@ -527,8 +526,15 @@ function initializeSecondaryViews() {
   $('voice-accent').addEventListener('change', saveVoicePreference);
   $('voice-gender').addEventListener('change', saveVoicePreference);
   document.querySelectorAll('[data-settings-page]').forEach((button) => button.addEventListener('click', () => {
-    showView(button.dataset.settingsPage);
-    if (button.dataset.settingsPage === 'voice') {
+    const page = button.dataset.settingsPage;
+    if (page === 'account') {
+      showView('settings');
+      $('account-panel').hidden = false;
+      $('account-panel').scrollIntoView({ behavior: 'smooth', block: 'start' });
+      return;
+    }
+    showView(page);
+    if (page === 'voice') {
       $('voice-setting-detail').checked = voiceOn;
       $('voice-accent-detail').value = voicePreferences.accent || 'auto';
       $('voice-gender-detail').value = voicePreferences.gender || 'auto';
@@ -545,6 +551,12 @@ function initializeSecondaryViews() {
   $('voice-accent-detail').addEventListener('change', (event) => { $('voice-accent').value = event.target.value; $('voice-accent').dispatchEvent(new Event('change')); });
   $('voice-gender-detail').addEventListener('change', (event) => { $('voice-gender').value = event.target.value; $('voice-gender').dispatchEvent(new Event('change')); });
   $('test-voice').addEventListener('click', () => speak('This is how Sous-easy will sound while you cook. Take one step at a time.', false));
+  $('send-help').addEventListener('click', () => {
+    const message = $('help-message').value.trim();
+    if (!message) { showToast('Write a short message first.'); $('help-message').focus(); return; }
+    $('help-message').value = '';
+    showToast('Thanks — your feedback is ready to send.');
+  });
   renderNewRecipes();
   renderShopping();
 }
@@ -937,9 +949,10 @@ function initializeProfileMenu() {
     const action = button.dataset.profileAction;
     menu.hidden = true;
     $('profile-button').setAttribute('aria-expanded', 'false');
-    if (action === 'settings' || action === 'saved' || action === 'friends') showView(action);
+    if (action === 'settings') { showView('settings'); $('account-panel').hidden = false; $('account-panel').scrollIntoView({ behavior: 'smooth', block: 'start' }); }
+    else if (action === 'saved' || action === 'friends') showView(action);
     else if (action === 'profile') { showView('profile'); populateProfileForm({}, authUser); }
-    else if (action === 'help') showToast('Tell us what would make cooking easier.');
+    else if (action === 'help') showView('help');
     else if (action === 'signout') {
       if (supabaseClient) {
         const { error } = await supabaseClient.auth.signOut();
