@@ -308,7 +308,8 @@ let activeSourceType = 'url';
 
 function showView(view) {
   activeView = view;
-  document.querySelectorAll('.nav-item').forEach((item) => item.classList.toggle('active', item.dataset.view === view));
+  const navView = ['privacy', 'voice', 'about'].includes(view) ? 'settings' : view;
+  document.querySelectorAll('.nav-item').forEach((item) => item.classList.toggle('active', item.dataset.view === navView));
   document.querySelectorAll('.content-view').forEach((item) => { item.hidden = item.id !== `${view}-view`; });
   document.querySelectorAll('.home-only').forEach((item) => { if (view !== 'home' || (cookingActive && item.id !== 'setup-panel')) item.hidden = true; else if (item.id !== 'setup-panel') item.hidden = false; });
   if (view === 'home') {
@@ -510,6 +511,25 @@ function initializeSecondaryViews() {
   };
   $('voice-accent').addEventListener('change', saveVoicePreference);
   $('voice-gender').addEventListener('change', saveVoicePreference);
+  document.querySelectorAll('[data-settings-page]').forEach((button) => button.addEventListener('click', () => {
+    showView(button.dataset.settingsPage);
+    if (button.dataset.settingsPage === 'voice') {
+      $('voice-setting-detail').checked = voiceOn;
+      $('voice-accent-detail').value = voicePreferences.accent || 'auto';
+      $('voice-gender-detail').value = voicePreferences.gender || 'auto';
+    }
+  }));
+  document.querySelectorAll('[data-settings-back]').forEach((button) => button.addEventListener('click', () => showView('settings')));
+  $('privacy-signout').addEventListener('click', () => document.querySelector('[data-profile-action="signout"]').click());
+  $('voice-setting-detail').addEventListener('change', (event) => {
+    voiceOn = event.target.checked;
+    $('voice-setting').checked = voiceOn;
+    if (!voiceOn) window.speechSynthesis?.cancel();
+    showToast(voiceOn ? 'Voice instructions on.' : 'Voice instructions muted.');
+  });
+  $('voice-accent-detail').addEventListener('change', (event) => { $('voice-accent').value = event.target.value; $('voice-accent').dispatchEvent(new Event('change')); });
+  $('voice-gender-detail').addEventListener('change', (event) => { $('voice-gender').value = event.target.value; $('voice-gender').dispatchEvent(new Event('change')); });
+  $('test-voice').addEventListener('click', () => speak('This is how Sousy will sound while you cook. Take one step at a time.', false));
   renderNewRecipes();
   renderShopping();
 }
