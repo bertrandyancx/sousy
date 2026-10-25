@@ -64,8 +64,11 @@ class SousyHandler(SimpleHTTPRequestHandler):
         if path == "/api/config":
             # These are public browser configuration values. Never expose the
             # Portkey key or a Supabase service-role key here.
+            supabase_url = os.environ.get("SUPABASE_URL", "").rstrip("/")
+            if supabase_url.endswith("/rest/v1"):
+                supabase_url = supabase_url[:-len("/rest/v1")]
             self._json(200, {
-                "supabase_url": os.environ.get("SUPABASE_URL", ""),
+                "supabase_url": supabase_url,
                 "supabase_anon_key": os.environ.get("SUPABASE_ANON_KEY", ""),
             })
             return
