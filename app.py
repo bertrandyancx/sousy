@@ -297,8 +297,8 @@ def plan_image_with_luna(image: str, preferences: dict) -> dict:
     response = client.chat.completions.create(
         model="gpt-6-luna",
         messages=[
-            {"role": "system", "content": "You are Sous-easy's recipe planner. Read the recipe image, preserve its measurements, and return the same structured JSON plan fields as the text planner. Do not guess missing measurements."},
-            {"role": "user", "content": [{"type": "text", "text": json.dumps({"preferences": preferences, "required_output": {"servings": "number or null from the image", "ingredients": "array", "equipment": "array", "tasks": "ordered beginner tasks with duration and completion_cue", "cleanup": "array", "feasibility": "object"}})}, {"type": "image_url", "image_url": {"url": image}}]},
+            {"role": "system", "content": "You are Sous-easy's recipe planner. Read the recipe image, preserve its measurements, and return the same structured JSON plan fields as the text planner. Do not guess missing measurements. Every cooking task must read like a concise recipe method step and must repeat exact quantities for ingredients used in that step."},
+            {"role": "user", "content": [{"type": "text", "text": json.dumps({"preferences": preferences, "required_output": {"servings": "number or null from the image", "ingredients": "array with exact quantities", "equipment": "array", "tasks": "ordered recipe-method steps; each has title, task, ingredients_used with exact quantities, duration, and completion_cue", "cleanup": "array", "feasibility": "object"}})}, {"type": "image_url", "image_url": {"url": image}}]},
         ],
     )
     return parse_model_json(response.choices[0].message.content)
@@ -328,7 +328,7 @@ def plan_with_luna(recipe: str, preferences: dict) -> dict:
         "required_output": {
             "equipment": "array of detailed equipment with purpose",
             "ingredients": "array with quantity, preparation, and allergen notes",
-            "tasks": "ordered tasks with duration, heat level, dependencies, completion cue, and safety banner",
+            "tasks": "ordered recipe-method steps with title, exact ingredients_used quantities, duration, heat level, equipment, dependencies, completion cue, and safety banner",
             "cleanup": "ordered cleanup tasks",
             "feasibility": "timing assessment and assumptions",
         },
@@ -340,7 +340,14 @@ def plan_with_luna(recipe: str, preferences: dict) -> dict:
                 "role": "system",
                 "content": (
                     "You are Sous-easy's planning layer. Design safe, explicit cooking instructions "
-                    "for a beginner. Do not invent missing measurements. Return valid JSON only."
+                    "for a beginner that read like a clear recipe method. Do not invent missing measurements. "
+                    "Return valid JSON only. For every task, use this shape: {title, task, ingredients_used, "
+                    "duration, completion_cue}. The task field must be a complete recipe-style instruction, "
+                    "not a vague command. ingredients_used must list every ingredient used in that step with "
+                    "the exact quantity and unit copied from the source. Never write 'some', 'as needed', "
+                    "or 'add the ingredients' when the source provides a measurement. Preserve the source's "
+                    "units and amounts. If the source truly gives no quantity, say 'amount not specified in source' "
+                    "rather than guessing. Include exact stove heat or temperature and equipment in the task text."
                 ),
             },
             {"role": "user", "content": json.dumps(prompt)},

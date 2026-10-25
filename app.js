@@ -92,6 +92,25 @@ function formatPlanEntry(entry, type) {
   return [main || detail, main && detail ? `— ${detail}` : ''].filter(Boolean).join(' ').trim();
 }
 
+function formatTaskIngredients(entry) {
+  const raw = entry?.ingredients_used ?? entry?.ingredient_amounts ?? entry?.amounts ?? entry?.ingredients ?? [];
+  const values = Array.isArray(raw) ? raw : [raw];
+  return values.map((item) => formatPlanEntry(item, 'ingredient')).filter(Boolean);
+}
+
+function taskText(entry) {
+  return firstEntryValue(entry, ['instruction', 'instructions', 'action', 'step', 'task']) || 'Complete this cooking step.';
+}
+
+function taskTitle(entry) {
+  return firstEntryValue(entry, ['title', 'step_title', 'name', 'task', 'instruction']) || 'Cooking step';
+}
+
+function taskIngredientHtml(task) {
+  if (!task.ingredients?.length) return '';
+  return `<div class="task-ingredients"><strong>Use exactly</strong><ul>${task.ingredients.map((item) => `<li>${formatInstruction(item)}</li>`).join('')}</ul></div>`;
+}
+
 function formatStationItem(item) {
   const parts = String(item || '').split(/\s+—\s+/, 2);
   const main = escapeInstructionHtml(parts[0]);
@@ -122,7 +141,7 @@ function renderOverview() {
   const stages = [];
   for (let index = 0; index < tasks.length; index += chunkSize) {
     const group = tasks.slice(index, index + chunkSize);
-    stages.push(`<li class="overview-stage"><details><summary><b>${escapeInstructionHtml(group[0].title)}</b><span>${group.length} detailed action${group.length === 1 ? '' : 's'} · ${escapeInstructionHtml(group[0].tag.toLowerCase())}</span></summary><ol class="overview-actions">${group.map((task) => `<li><details class="overview-action"><summary><b>${escapeInstructionHtml(task.title)}</b><span>${escapeInstructionHtml(task.duration || '1 min')}</span></summary><div class="overview-action-copy"><p>${formatInstruction(task.copy || '')}</p><p><strong>When done:</strong> ${formatInstruction(task.cue || 'Tell me when this action is complete.')}</p></div></details></li>`).join('')}</ol></details></li>`);
+    stages.push(`<li class="overview-stage"><details><summary><b>${escapeInstructionHtml(group[0].title)}</b><span>${group.length} detailed action${group.length === 1 ? '' : 's'} · ${escapeInstructionHtml(group[0].tag.toLowerCase())}</span></summary><ol class="overview-actions">${group.map((task) => `<li><details class="overview-action"><summary><b>${escapeInstructionHtml(task.title)}</b><span>${escapeInstructionHtml(task.duration || '1 min')}</span></summary><div class="overview-action-copy">${taskIngredientHtml(task)}<p>${formatInstruction(task.copy || '')}</p><p><strong>When done:</strong> ${formatInstruction(task.cue || 'Tell me when this action is complete.')}</p></div></details></li>`).join('')}</ol></details></li>`);
   }
   stageCount.textContent = `${stages.length} stages`;
   list.innerHTML = stages.join('');
@@ -210,6 +229,8 @@ function renderTask(announce = false) {
   const task = tasks[current];
   $('task-tag').textContent = task.tag;
   $('current-task-title').textContent = task.title;
+  $('current-task-ingredients').innerHTML = taskIngredientHtml(task);
+  $('current-task-ingredients').hidden = !task.ingredients?.length;
   $('current-task-copy').innerHTML = formatInstruction(task.copy);
   $('completion-copy').innerHTML = formatInstruction(task.cue);
   $('task-duration').textContent = task.duration;
@@ -226,7 +247,7 @@ function renderTask(announce = false) {
   $('timer-button').textContent = 'Pause countdown';
   renderLyrics();
   startTimer();
-  if (announce) speak(`${task.title}. ${task.copy} ${task.cue}`);
+  if (announce) speak(`${task.title}. ${task.ingredients?.length ? `Use exactly: ${task.ingredients.join(', ')}. ` : ''}${task.copy} ${task.cue}`);
 }
 
 function formatTime(seconds) { return `${String(Math.floor(seconds / 60)).padStart(2,'0')}:${String(seconds % 60).padStart(2,'0')}`; }
@@ -1412,8 +1433,8 @@ function applyImportedRecipe(payload, sourceUrl, sourceAsset = null) {
 
   ingredients = (plan.ingredients || []).map((entry) => formatPlanEntry(entry, 'ingredient')).filter(Boolean);
   equipment = (plan.equipment || []).map((entry) => formatPlanEntry(entry, 'equipment')).filter(Boolean);
-  const plannedTasks = (plan.tasks || []).map((entry) => ({ tag:'COOK', title:entry.task || 'Cooking step', duration:entry.duration || '1 min', minutes:parseDurationMinutes(entry.duration), copy:entry.task || 'Complete this cooking step.', cue:entry.completion_cue || 'Tell me when this step is complete.' }));
-  const cleanupTasks = (plan.cleanup || []).map((entry) => ({ tag:'CLEAN UP', title:'Clean up', duration:'1 min', minutes:1, copy:entry.task || 'Complete this cleanup step.', cue:entry.safety_note || 'Tell me when cleanup is complete.' }));
+  const plannedTasks = (plan.tasks || []).map((entry) => ({ tag:entry.stage || entry.tag || 'COOK', title:taskTitle(entry), duration:entry.duration || '1 min', minutes:parseDurationMinutes(entry.duration), ingredients:formatTaskIngredients(entry), copy:taskText(entry), cue:entry.completion_cue || entry.when_done || 'Tell me when this step is complete.' }));
+  const cleanupTasks = (plan.cleanup || []).map((entry) => ({ tag:'CLEAN UP', title:taskTitle(entry) === 'Cooking step' ? 'Clean up' : taskTitle(entry), duration:entry.duration || '1 min', minutes:parseDurationMinutes(entry.duration), ingredients:formatTaskIngredients(entry), copy:taskText(entry), cue:entry.safety_note || entry.completion_cue || 'Tell me when cleanup is complete.' }));
   tasks.splice(0, tasks.length, ...plannedTasks, ...cleanupTasks);
   current = 0;
   renderLists();
