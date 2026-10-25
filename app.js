@@ -471,6 +471,11 @@ async function requestParsedServing(sourceType, sourceValue, origin) {
 }
 
 function initializeSecondaryViews() {
+  $('brand-home').addEventListener('click', () => {
+    showView('home');
+    $('setup-panel').hidden = true;
+    if (!cookingActive) $('dashboard').hidden = false;
+  });
   document.querySelectorAll('.nav-item').forEach((item) => item.addEventListener('click', () => showView(item.dataset.view)));
   document.querySelectorAll('[data-saved-tab]').forEach((tab) => tab.addEventListener('click', () => {
     document.querySelectorAll('[data-saved-tab]').forEach((item) => item.classList.toggle('active', item === tab));
