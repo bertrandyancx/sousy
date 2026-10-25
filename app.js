@@ -661,6 +661,11 @@ function showAuthScreen() {
 
 function hideAuthScreen() { $('auth-screen').hidden = true; }
 
+function showAuthStatus(message) {
+  const status = $('auth-status');
+  if (status) status.textContent = message || '';
+}
+
 function continueAsGuest() {
   let guest = JSON.parse(localStorage.getItem('sous-easy-guest-profile') || 'null');
   if (!guest) {
@@ -688,7 +693,7 @@ function hideOnboardingScreen() {
 }
 
 async function submitAuthScreen() {
-  if (!supabaseClient) { showToast('Supabase accounts are not configured yet.'); return; }
+  if (!supabaseClient) { showAuthStatus('Accounts are not connected on this deployment yet. Add the Supabase environment variables in Render.'); return; }
   const signup = authScreenMode === 'signup';
   const button = $('auth-submit');
   const email = $('auth-email').value.trim();
@@ -702,11 +707,12 @@ async function submitAuthScreen() {
     const result = signup
       ? await supabaseClient.auth.signUp({ email, password, options: { data: { username, display_name: username } } })
       : await supabaseClient.auth.signInWithPassword({ email, password });
-    if (result.error) { showToast(friendlyAuthError(result.error)); return; }
+    if (result.error) { showAuthStatus(friendlyAuthError(result.error)); return; }
+    showAuthStatus('');
     if (signup && !result.data.session) showToast('Check your email to confirm your account.');
     else { hideAuthScreen(); showToast(signup ? 'Your Sous-easy account is ready.' : 'Welcome back to Sous-easy.'); }
   } catch (error) {
-    showToast(`Account request failed: ${error.message || 'Please try again.'}`);
+    showAuthStatus(`Account request failed: ${error.message || 'Please try again.'}`);
   } finally {
     button.disabled = false;
     setAuthScreenMode(authScreenMode);
@@ -718,9 +724,20 @@ function initializeAuthScreen() {
   $('auth-submit').addEventListener('click', submitAuthScreen);
   $('auth-password').addEventListener('keydown', (event) => { if (event.key === 'Enter') submitAuthScreen(); });
   $('auth-google').addEventListener('click', async () => {
-    if (!supabaseClient) { showToast('Supabase accounts are not configured yet.'); return; }
-    const { error } = await supabaseClient.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: window.location.origin } });
-    if (error) showToast(error.message);
+    const button = $('auth-google');
+    if (!supabaseClient) { showAuthStatus('Google sign-in is not connected on this deployment yet. Add the Supabase environment variables in Render.'); return; }
+    button.disabled = true;
+    button.textContent = 'Opening Google…';
+    showAuthStatus('');
+    try {
+      const { error } = await supabaseClient.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: window.location.origin } });
+      if (error) showAuthStatus(friendlyAuthError(error));
+    } catch (error) {
+      showAuthStatus(`Google sign-in failed: ${error.message || 'Please try again.'}`);
+    } finally {
+      button.disabled = false;
+      button.innerHTML = '<span>G</span> Continue with Google';
+    }
   });
   $('auth-continue').addEventListener('click', continueAsGuest);
   setAuthScreenMode('signin');
@@ -855,7 +872,10 @@ async function initializeSupabase() {
   try {
     const response = await fetch('/api/config');
     const config = await response.json();
-    if (!config.supabase_url || !config.supabase_anon_key) return;
+    if (!config.supabase_url || !config.supabase_anon_key) {
+      showAuthStatus('Google and email sign-in need SUPABASE_URL and SUPABASE_ANON_KEY in the Render service environment.');
+      return;
+    }
     supabaseClient = window.supabase.createClient(config.supabase_url, config.supabase_anon_key);
     const { data } = await supabaseClient.auth.getSession();
     if (data.session?.user) await loadAuthenticatedProfile(data.session.user);
@@ -863,7 +883,8 @@ async function initializeSupabase() {
       window.setTimeout(() => session?.user ? loadAuthenticatedProfile(session.user) : (authUser = null), 0);
     });
   } catch (error) {
-    console.warn('Supabase is not configured yet.');
+    console.warn('Supabase could not be initialized.', error);
+    showAuthStatus('Sign-in could not connect to the account service. Refresh and try again.');
   }
 }
 

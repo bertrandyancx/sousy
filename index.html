@@ -19,6 +19,7 @@
     <link rel="stylesheet" href="preview-styles.css" />
     <link rel="stylesheet" href="shopping-styles.css" />
     <link rel="stylesheet" href="auth-styles.css" />
+    <link rel="stylesheet" href="auth-status.css?v=20261025-auth" />
     <link rel="stylesheet" href="network-styles.css" />
     <link rel="stylesheet" href="upload-styles.css" />
     <link rel="stylesheet" href="voice-styles.css" />
@@ -44,6 +45,7 @@
         <p class="auth-intro" id="auth-screen-copy">Sign in to return to your cooking circle, saved recipes, and guided plans.</p>
         <div class="auth-screen-tabs"><button class="auth-screen-tab active" data-auth-mode="signin">Sign in</button><button class="auth-screen-tab" data-auth-mode="signup">Create account</button></div>
         <button class="google-button" id="auth-google"><span>G</span> Continue with Google</button>
+        <p class="auth-status" id="auth-status" role="status" aria-live="polite"></p>
         <div class="or-divider"><span>or use email</span></div>
         <label id="auth-username-field" hidden>Username<input id="auth-username" autocomplete="username" placeholder="Choose a username" /><small class="auth-field-hint">Friends will use this to find you.</small></label>
         <label>Email<input id="auth-email" type="email" autocomplete="email" placeholder="you@example.com" /></label>
