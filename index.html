@@ -149,7 +149,7 @@
           <div class="sub-tabs" role="tablist"><button class="sub-tab active" data-saved-tab="inspirations">Inspirations</button><button class="sub-tab" data-saved-tab="new-recipes">New Recipes</button><button class="sub-tab" data-saved-tab="past">Past recipes</button></div>
           <div class="saved-panel" id="saved-inspirations"><div class="empty-saved" id="empty-saved"><span>♡</span><h3>Your saved ideas will live here</h3><p>Tap Save on an inspiration to build your cooking wish list.</p></div><div id="saved-inspiration-list"></div></div>
           <div class="saved-panel" id="saved-new-recipes" hidden><div class="empty-saved" id="empty-new-recipes"><span>▱</span><h3>Your imported recipes will live here</h3><p>Every recipe you upload or import will be saved automatically.</p></div><div id="new-recipe-list"></div></div>
-          <div class="saved-panel" id="saved-past" hidden><article class="past-recipe"><div class="past-icon">🍝</div><div><span class="community-tag">COOKED OCT 23</span><h3>Simple pasta carbonara</h3><p class="source">Source: Australia’s Best Recipes · 4 servings</p><button class="text-action" id="cook-again">Cook again →</button></div></article><div class="empty-past"><p>Your completed recipes will collect here after you finish a cook.</p></div></div>
+          <div class="saved-panel" id="saved-past" hidden><div id="past-recipe-list"></div><div class="empty-past" id="empty-past"><p>Your completed recipes will collect here after you finish a cook.</p></div></div>
         </section>
 
         <section class="content-view" id="shopping-view" hidden>
@@ -179,6 +179,6 @@
     <div class="toast" id="toast" role="status"></div>
     <div class="modal-backdrop" id="mic-warning" hidden><section class="mic-warning-modal" role="alertdialog" aria-modal="true" aria-labelledby="mic-warning-title"><div class="modal-icon">◖</div><p class="eyebrow">MANUAL MODE</p><h2 id="mic-warning-title">Microphone access is off</h2><p>Sous-easy can’t hear your responses. You’ll need to tap <strong>“I’m done” manually for every step</strong>. You can still use all timers, instructions, and alerts.</p><button class="primary-button" id="close-mic-warning">Continue manually</button></section></div>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script src="app.js?v=20261025-atomicsteps"></script>
+    <script src="app.js?v=20261025-pasthistory"></script>
   </body>
 </html>

@@ -368,13 +368,13 @@ async function requestWakeLock() { if (!('wakeLock' in navigator)) { showToast('
 
 function stopListening() { if (recognition) { recognition.onend = null; recognition.stop(); recognition = null; } listening = false; }
 
-function startCooking() { if (!tasks.length) { showToast('Import a recipe before starting.'); return; } cookingActive = true; $('dashboard').hidden = true; $('setup-panel').hidden = true; $('cook-mode').hidden = false; current = 0; renderTask(true); requestWakeLock(); beginListening(); window.scrollTo({top:0, behavior:'smooth'}); }
+function startCooking() { if (!tasks.length) { showToast('Import a recipe before starting.'); return; } cookingActive = true; $('dashboard').hidden = true; $('setup-panel').hidden = true; $('cook-mode').hidden = false; $('done-button').innerHTML = 'I’m done <span>→</span>'; current = 0; renderTask(true); requestWakeLock(); beginListening(); window.scrollTo({top:0, behavior:'smooth'}); }
 
 function goToPreviousTask() { if (current <= 0) { showToast('This is the first action.'); return; } stopTimer(); hideWarning(); current -= 1; renderTask(true); }
 
 function advanceTask() { if (current >= tasks.length - 1) { finishCooking(); return; } stopTimer(); hideWarning(); current += 1; renderTask(true); }
 
-function finishCooking() { cookingActive = false; $('progress-bar').style.width = '100%'; $('current-task-title').textContent = 'Dinner is ready'; $('current-task-copy').textContent = 'You made it through the plan. Sit down, take a breath, and enjoy your meal.'; $('completion-copy').textContent = 'You made it through the full cooking and cleanup plan.'; $('done-button').textContent = 'Finished ✓'; speak('Dinner is ready. You made it through the plan.'); showToast('Beautiful work — dinner is ready.'); stopListening(); if (wakeLock) wakeLock.release(); }
+function finishCooking() { markCurrentRecipeCompleted(); cookingActive = false; speak('Dinner is ready. Your recipe is now in Past recipes.'); stopListening(); stopTimer(); if (wakeLock) { wakeLock.release(); wakeLock = null; } showView('home'); $('cook-mode').hidden = true; $('dashboard').hidden = false; showToast('Dinner is ready — recipe saved to Past recipes.'); }
 
 function pauseCooking() { stopTimer(); if (window.speechSynthesis) window.speechSynthesis.pause(); showToast('Cooking paused. Say “resume” when you want to continue.'); }
 
@@ -415,9 +415,11 @@ function migrateLegacyStorage() {
 }
 migrateLegacyStorage();
 let newRecipes = JSON.parse(localStorage.getItem('sous-easy-new-recipes') || '[]');
+let pastRecipes = JSON.parse(localStorage.getItem('sous-easy-past-recipes') || '[]');
 let activeView = 'home';
 let cookingActive = false;
 let activeSourceType = 'url';
+let activePastRecipeId = '';
 
 function showView(view) {
   activeView = view;
@@ -519,15 +521,40 @@ function renderNewRecipes() {
   renderSavedRecipePicker();
 }
 
+function renderPastRecipes() {
+  const list = $('past-recipe-list');
+  const empty = $('empty-past');
+  empty.hidden = pastRecipes.length > 0;
+  list.innerHTML = pastRecipes.map((recipe, index) => {
+    const cookedDate = recipe.completedAt ? new Date(recipe.completedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }).toUpperCase() : 'COMPLETED';
+    return `<article class="past-recipe"><div class="past-icon">🍽</div><div><span class="community-tag">COOKED ${cookedDate}</span><h3>${escapeInstructionHtml(recipe.title)}</h3><p class="source">Source: ${escapeInstructionHtml(recipe.source || 'Imported recipe')}${recipe.servings ? ` · ${recipe.servings} servings` : ''}</p><button class="text-action" data-load-past-index="${index}">Cook again →</button></div></article>`;
+  }).join('');
+  list.querySelectorAll('[data-load-past-index]').forEach((button) => button.addEventListener('click', () => loadPastRecipe(Number(button.dataset.loadPastIndex))));
+}
+
 function saveNewRecipe(recipe, sourceUrl, plan = null, sourceAsset = null) {
   const isWebSource = /^https?:\/\//i.test(sourceUrl || '');
   const id = sourceAsset?.id || sourceUrl || `${recipe.title}-${Date.now()}`;
   const saved = { id, title: recipe.title, source: recipe.source || 'Imported recipe', servings: recipe.servings || null, ingredients: [...ingredients], equipment: [...equipment], sourceUrl: isWebSource ? sourceUrl : '', sourceType: sourceAsset?.type || (isWebSource ? 'url' : 'file'), sourceName: sourceAsset?.name || recipe.source || '', sourceAssetId: id, plan };
   newRecipes = [saved, ...newRecipes.filter((item) => item.id !== saved.id)];
   currentRecipeId = id;
+  activePastRecipeId = '';
   if (sourceAsset?.data) storeSourceAsset(id, sourceAsset);
   localStorage.setItem('sous-easy-new-recipes', JSON.stringify(newRecipes));
   renderNewRecipes();
+  renderShopping();
+}
+
+function markCurrentRecipeCompleted() {
+  const saved = newRecipes.find((recipe) => recipe.id === currentRecipeId) || pastRecipes.find((recipe) => recipe.id === currentRecipeId);
+  if (!saved) return;
+  const completed = { ...saved, completedAt: new Date().toISOString() };
+  pastRecipes = [completed, ...pastRecipes.filter((recipe) => recipe.id !== completed.id)];
+  newRecipes = newRecipes.filter((recipe) => recipe.id !== completed.id);
+  localStorage.setItem('sous-easy-past-recipes', JSON.stringify(pastRecipes));
+  localStorage.setItem('sous-easy-new-recipes', JSON.stringify(newRecipes));
+  renderNewRecipes();
+  renderPastRecipes();
   renderShopping();
 }
 
@@ -617,8 +644,22 @@ function loadSavedRecipe(index) {
   if (!saved) return;
   if (!saved.plan) { showToast('This older saved item needs to be imported again to create a cooking plan.'); return; }
   currentRecipeId = saved.id;
+  activePastRecipeId = '';
   const savedPlan = { ...saved.plan, ingredients: saved.ingredients?.length ? saved.ingredients : saved.plan.ingredients, equipment: saved.equipment?.length ? saved.equipment : saved.plan.equipment };
   applyImportedRecipe({ recipe: { title: saved.title, source: saved.source, servings: saved.servings, total_time: savedPlan.total_time || null }, plan: savedPlan }, saved.sourceUrl || saved.id, { type: saved.sourceType || (saved.sourceUrl ? 'url' : 'file'), name: saved.sourceName || saved.title, id: saved.sourceAssetId || saved.id });
+  showView('home');
+  $('setup-panel').hidden = true;
+  $('dashboard').scrollIntoView({ behavior: 'smooth' });
+}
+
+function loadPastRecipe(index) {
+  const saved = pastRecipes[index];
+  if (!saved) return;
+  if (!saved.plan) { showToast('This past recipe needs to be imported again to create a cooking plan.'); return; }
+  currentRecipeId = saved.id;
+  activePastRecipeId = saved.id;
+  const savedPlan = { ...saved.plan, ingredients: saved.ingredients?.length ? saved.ingredients : saved.plan.ingredients, equipment: saved.equipment?.length ? saved.equipment : saved.plan.equipment };
+  applyImportedRecipe({ recipe: { title: saved.title, source: saved.source, servings: saved.servings, total_time: savedPlan.total_time || null }, plan: savedPlan }, saved.sourceUrl || saved.id, { type: saved.sourceType || (saved.sourceUrl ? 'url' : 'file'), name: saved.sourceName || saved.title, id: saved.sourceAssetId || saved.id }, { save: false });
   showView('home');
   $('setup-panel').hidden = true;
   $('dashboard').scrollIntoView({ behavior: 'smooth' });
@@ -761,7 +802,6 @@ function initializeSecondaryViews() {
     card.querySelector('[data-save]').addEventListener('click', () => { saveInspiration(card.querySelector('[data-save]').dataset.save, title, source, '✦'); card.querySelector('[data-save]').textContent = '♥ Saved'; });
     $('post-title').value = ''; $('post-source').value = ''; $('post-story').value = ''; $('post-panel').hidden = true; showToast('Your inspiration is now on the community page.');
   });
-  $('cook-again').addEventListener('click', () => { cookingActive = false; showView('home'); $('start-cooking').click(); });
   $('dark-mode-toggle').checked = localStorage.getItem('sous-easy-dark-mode') === 'true';
   document.documentElement.classList.toggle('dark-mode', $('dark-mode-toggle').checked);
   $('dark-mode-toggle').addEventListener('change', (event) => { document.documentElement.classList.toggle('dark-mode', event.target.checked); localStorage.setItem('sous-easy-dark-mode', event.target.checked); showToast(event.target.checked ? 'Dark mode on.' : 'Light mode on.'); });
@@ -808,6 +848,7 @@ function initializeSecondaryViews() {
     showToast('Thanks — your feedback is ready to send.');
   });
   renderNewRecipes();
+  renderPastRecipes();
   renderShopping();
 }
 
@@ -1418,7 +1459,7 @@ function renderCurrentSourceLabel() {
   }
 }
 
-function applyImportedRecipe(payload, sourceUrl, sourceAsset = null) {
+function applyImportedRecipe(payload, sourceUrl, sourceAsset = null, options = {}) {
   const recipe = payload.recipe;
   const plan = payload.plan || {};
   const isWebSource = /^https?:\/\//i.test(sourceUrl || '');
@@ -1454,7 +1495,7 @@ function applyImportedRecipe(payload, sourceUrl, sourceAsset = null) {
   tasks.splice(0, tasks.length, ...plannedTasks, ...cleanupTasks);
   current = 0;
   renderLists();
-  saveNewRecipe(recipe, sourceUrl, plan, sourceAsset ? { ...sourceAsset, id: sourceId } : (isWebSource ? { type: 'url', id: sourceId } : null));
+  if (options.save !== false) saveNewRecipe(recipe, sourceUrl, plan, sourceAsset ? { ...sourceAsset, id: sourceId } : (isWebSource ? { type: 'url', id: sourceId } : null));
   showToast(`Loaded “${recipe.title}” and rebuilt the cooking plan.`);
 }
 
