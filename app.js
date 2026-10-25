@@ -886,19 +886,6 @@ function showAuthStatus(message) {
   if (status) status.textContent = message || '';
 }
 
-function continueAsGuest() {
-  let guest = JSON.parse(localStorage.getItem('sous-easy-guest-profile') || 'null');
-  if (!guest) {
-    const number = Math.floor(10000 + Math.random() * 90000);
-    guest = { name: `User${number}`, handle: `@user${number}` };
-    localStorage.setItem('sous-easy-guest-profile', JSON.stringify(guest));
-  }
-  authUser = null;
-  setProfile(guest.name, guest.handle);
-  hideAuthScreen();
-  showToast(`Continuing as ${guest.name}.`);
-}
-
 function showOnboardingScreen(user) {
   if (!user || onboardingShownThisSession || user.user_metadata?.onboarding_complete) return;
   const key = `sous-easy-onboarding-complete-${user.id}`;
@@ -963,7 +950,6 @@ function initializeAuthScreen() {
       button.innerHTML = '<span>G</span> Continue with Google';
     }
   });
-  $('auth-continue').addEventListener('click', continueAsGuest);
   setAuthScreenMode('signin');
 }
 
@@ -972,6 +958,13 @@ function initializeOnboarding() {
 }
 
 function hasRealAccount() { return Boolean(supabaseClient && authUser); }
+
+function clearStoredAnonymousProfile() {
+  localStorage.removeItem('sous-easy-profile');
+  localStorage.removeItem('sous-easy-guest-profile');
+  authUser = null;
+  showAuthScreen();
+}
 
 function friendlyAuthError(error) {
   if (error?.code === '23505' || /duplicate|already exists|already registered/i.test(error?.message || '')) return 'That username or email is already in use.';
@@ -1103,8 +1096,9 @@ async function initializeSupabase() {
     supabaseClient = window.supabase.createClient(config.supabase_url, config.supabase_anon_key);
     const { data } = await supabaseClient.auth.getSession();
     if (data.session?.user) await loadAuthenticatedProfile(data.session.user);
+    else clearStoredAnonymousProfile();
     supabaseClient.auth.onAuthStateChange((_event, session) => {
-      window.setTimeout(() => session?.user ? loadAuthenticatedProfile(session.user) : (authUser = null), 0);
+      window.setTimeout(() => session?.user ? loadAuthenticatedProfile(session.user) : clearStoredAnonymousProfile(), 0);
     });
   } catch (error) {
     console.warn('Supabase could not be initialized.', error);
@@ -1138,8 +1132,6 @@ function initializeSocialInteractions() {
   });
   $('friend-search-input').addEventListener('keydown', (event) => { if (event.key === 'Enter') $('find-friend-button').click(); });
 
-  const storedProfile = JSON.parse(localStorage.getItem('sous-easy-profile') || 'null');
-  if (storedProfile) setProfile(storedProfile.name, storedProfile.handle);
   $('open-account').addEventListener('click', () => { $('account-panel').hidden = !$('account-panel').hidden; });
   document.querySelectorAll('[data-account-tab]').forEach((tab) => tab.addEventListener('click', () => {
     document.querySelectorAll('[data-account-tab]').forEach((item) => item.classList.toggle('active', item === tab));
@@ -1206,12 +1198,10 @@ function initializeProfileMenu() {
       authUser = null;
       onboardingShownThisSession = false;
       hideOnboardingScreen();
-      localStorage.removeItem('sous-easy-profile');
+      clearStoredAnonymousProfile();
       localStorage.removeItem('sous-easy-profile-photo');
-      setProfile('Bertrand', '@homecook');
       $('profile-menu').hidden = true;
       $('profile-button').setAttribute('aria-expanded', 'false');
-      showAuthScreen();
       showToast('Signed out.');
     }
   }));

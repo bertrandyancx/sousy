@@ -38,7 +38,7 @@
         <button class="primary-button" id="finish-onboarding">Start cooking with Sous-easy <span>→</span></button>
       </div>
     </section>
-    <section class="auth-screen" id="auth-screen" hidden>
+    <section class="auth-screen" id="auth-screen">
       <div class="auth-card paper-texture">
         <div class="auth-brand"><span class="brand-mark">✿</span><span>Sous-easy</span></div>
         <p class="eyebrow" id="auth-screen-eyebrow">WELCOME BACK</p>
@@ -52,7 +52,6 @@
         <label>Email<input id="auth-email" type="email" autocomplete="email" placeholder="you@example.com" /></label>
         <label>Password<input id="auth-password" type="password" autocomplete="current-password" placeholder="At least 8 characters" /></label>
         <button class="primary-button" id="auth-submit">Sign in to Sous-easy <span>→</span></button>
-        <button class="auth-continue" id="auth-continue">Continue without an account</button>
       </div>
     </section>
     <div class="app-shell">
@@ -180,6 +179,6 @@
     <div class="toast" id="toast" role="status"></div>
     <div class="modal-backdrop" id="mic-warning" hidden><section class="mic-warning-modal" role="alertdialog" aria-modal="true" aria-labelledby="mic-warning-title"><div class="modal-icon">◖</div><p class="eyebrow">MANUAL MODE</p><h2 id="mic-warning-title">Microphone access is off</h2><p>Sous-easy can’t hear your responses. You’ll need to tap <strong>“I’m done” manually for every step</strong>. You can still use all timers, instructions, and alerts.</p><button class="primary-button" id="close-mic-warning">Continue manually</button></section></div>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script src="app.js?v=20261025-planvoice2"></script>
+    <script src="app.js?v=20261025-authgate"></script>
   </body>
 </html>
