@@ -54,6 +54,8 @@ let listening = false;
 let assistantSpeaking = false;
 let timerSeconds = 0;
 let timerHandle = null;
+let backgroundTimers = [];
+let backgroundTimerHandle = null;
 let wakeLock = null;
 let recognition = null;
 let manualMode = false;
@@ -159,12 +161,15 @@ function chooseSpeechVoice() {
   if (!('speechSynthesis' in window)) return null;
   const voices = window.speechSynthesis.getVoices();
   if (!voices.length) return null;
-  const accentMatches = voicePreferences.accent === 'auto' ? voices : voices.filter((voice) => voice.lang.toLowerCase().startsWith(voicePreferences.accent.toLowerCase()));
+  const englishVoices = voices.filter((voice) => /^en(?:-|_)/i.test(voice.lang));
+  const availableVoices = englishVoices.length ? englishVoices : voices;
+  const accentMatches = voicePreferences.accent === 'auto' ? availableVoices : availableVoices.filter((voice) => voice.lang.toLowerCase().startsWith(voicePreferences.accent.toLowerCase()));
   const genderWords = voicePreferences.gender === 'feminine'
     ? /female|woman|samantha|karen|moira|serena|victoria|ava|allison|susan|fiona|zira|tessa/i
     : /male|man|daniel|alex|fred|tom|arthur|oliver|lee|gordon|rishi|aaron/i;
   const genderMatches = voicePreferences.gender === 'auto' ? accentMatches : accentMatches.filter((voice) => genderWords.test(voice.name));
-  return genderMatches[0] || accentMatches[0] || voices[0];
+  const localVoice = (genderMatches.length ? genderMatches : accentMatches).find((voice) => voice.localService);
+  return localVoice || genderMatches[0] || accentMatches[0] || availableVoices[0] || voices[0];
 }
 
 function speak(text, priority = false) {
@@ -176,8 +181,9 @@ function speak(text, priority = false) {
   const utterance = new SpeechSynthesisUtterance(String(text).replace(/\s+/g, ' ').trim());
   const selectedVoice = chooseSpeechVoice();
   if (selectedVoice) utterance.voice = selectedVoice;
-  utterance.rate = priority ? 1 : .87;
-  utterance.pitch = 1;
+  utterance.lang = selectedVoice?.lang || 'en-US';
+  utterance.rate = priority ? 1 : .96;
+  utterance.pitch = 1.02;
   utterance.volume = 1;
   utterance.onstart = () => {
     assistantSpeaking = true;
@@ -196,6 +202,19 @@ function speak(text, priority = false) {
   utterance.onend = resumeListening;
   utterance.onerror = resumeListening;
   speechStartHandle = window.setTimeout(() => window.speechSynthesis.speak(utterance), 40);
+}
+
+function spokenTask(task) {
+  const parts = [`Next, ${task.title}.`];
+  if (task.ingredients?.length) {
+    const items = task.ingredients.length === 1
+      ? task.ingredients[0]
+      : `${task.ingredients.slice(0, -1).join(', ')}, and ${task.ingredients[task.ingredients.length - 1]}`;
+    parts.push(`Use ${items}.`);
+  }
+  if (task.copy) parts.push(task.copy);
+  if (task.cue) parts.push(`When you're done, ${task.cue.replace(/^[.!?\s]+/, '').replace(/[.!?]+$/, '')}.`);
+  return parts.join(' ');
 }
 
 function showToast(message) {
@@ -254,13 +273,66 @@ function renderTask(announce = false) {
   $('timer-display').textContent = formatTime(timerSeconds);
   $('timer-button').textContent = 'Pause countdown';
   renderLyrics();
+  startBackgroundTimer(task);
+  renderBackgroundTimers();
   startTimer();
-  if (announce) speak(`${task.title}. ${task.ingredients?.length ? `Use exactly: ${task.ingredients.join(', ')}. ` : ''}${task.copy} ${task.cue}`);
+  if (announce) speak(spokenTask(task));
 }
 
 function formatTime(seconds) { return `${String(Math.floor(seconds / 60)).padStart(2,'0')}:${String(seconds % 60).padStart(2,'0')}`; }
 
 function stopTimer() { window.clearInterval(timerHandle); timerHandle = null; }
+
+function backgroundTimerFromTask(task) {
+  const source = task?.backgroundTimer || task?.background_timer;
+  if (!source) return null;
+  if (typeof source === 'number') return { label: task.title, minutes: source, priority: 'normal' };
+  if (typeof source !== 'object') return null;
+  const rawMinutes = source.minutes ?? source.duration ?? task.minutes ?? 1;
+  const minutes = typeof rawMinutes === 'number' ? rawMinutes : parseDurationMinutes(rawMinutes);
+  return { label: source.label || task.title, minutes: Math.max(1, minutes), priority: source.priority || 'normal', cue: source.completion_cue || source.completionCue || '' };
+}
+
+function startBackgroundTimer(task) {
+  const timer = backgroundTimerFromTask(task);
+  if (!timer) return;
+  const timerId = task.backgroundTimerId || `${current}-${timer.label}`;
+  if (backgroundTimers.some((item) => item.id === timerId)) return;
+  backgroundTimers.push({ ...timer, id: timerId, remaining: Math.round(timer.minutes * 60), overdue: false });
+  if (!backgroundTimerHandle) {
+    backgroundTimerHandle = window.setInterval(tickBackgroundTimers, 1000);
+  }
+}
+
+function tickBackgroundTimers() {
+  let changed = false;
+  backgroundTimers.forEach((timer) => {
+    if (timer.overdue) return;
+    timer.remaining -= 1;
+    changed = true;
+    if (timer.remaining <= 0) {
+      timer.remaining = 0;
+      timer.overdue = true;
+      soundAlarm();
+      showWarning(`${timer.label} needs attention`, timer.cue || `Check the ${timer.label.toLowerCase()} now before continuing.`, timer.priority === 'urgent');
+    }
+  });
+  if (changed) renderBackgroundTimers();
+}
+
+function renderBackgroundTimers() {
+  const container = $('active-timers');
+  const cards = $('timer-cards');
+  if (!container || !cards) return;
+  container.hidden = !backgroundTimers.length;
+  cards.innerHTML = backgroundTimers.map((timer) => `<div class="timer-card ${timer.overdue ? 'timer-overdue' : ''}"><div><p>${escapeInstructionHtml(timer.label)}</p><small>${timer.overdue ? 'Needs attention now' : 'Still cooking in the background'}</small></div><strong>${formatTime(timer.remaining)}</strong><button class="timer-check-button" data-timer-check="${escapeInstructionHtml(timer.id)}">${timer.overdue ? 'Checked' : 'Check'}</button></div>`).join('');
+  cards.querySelectorAll('[data-timer-check]').forEach((button) => button.addEventListener('click', () => {
+    backgroundTimers = backgroundTimers.filter((timer) => timer.id !== button.dataset.timerCheck);
+    if (!backgroundTimers.length && backgroundTimerHandle) { window.clearInterval(backgroundTimerHandle); backgroundTimerHandle = null; }
+    renderBackgroundTimers();
+    showToast('Background task checked off.');
+  }));
+}
 
 function startTimer() {
   if (timerHandle) { stopTimer(); $('timer-button').textContent = 'Resume countdown'; showToast('Countdown paused.'); return; }
@@ -279,6 +351,17 @@ function startTimer() {
 
 function handleOverdueStep() {
   const overdueTask = tasks[current];
+  const handsOnPrep = /(?:SET UP|PREP)/i.test(overdueTask.tag || '') && /cut|chop|dice|slice|peel|trim|wash|separate|whisk|measure/i.test(`${overdueTask.title} ${overdueTask.copy}`);
+  if (handsOnPrep) {
+    overdueTask.minutes = Math.max(1, overdueTask.minutes || 1) + 1;
+    timerSeconds = 60;
+    $('timer-display').textContent = formatTime(timerSeconds);
+    $('task-duration').textContent = `${overdueTask.minutes} min target`;
+    speak(`Take your time with ${overdueTask.title.toLowerCase()}. I’m giving you another minute. Tell me when it’s actually done.`, true);
+    showWarning('Take the time you need', `You are still on “${overdueTask.title}.” I will stay here while you finish it.`, false);
+    startTimer();
+    return;
+  }
   const urgent = ['COOK', 'FINISH'].includes(overdueTask.tag);
   const nextTask = tasks[current + 1];
   soundAlarm();
@@ -295,6 +378,12 @@ function handleOverdueStep() {
 
 async function recalculateInstructions(reason) {
   const task = tasks[current];
+  if (/knife|cross[- ]?contamination|raw food|raw meat/i.test(reason)) {
+    tasks.splice(current + 1, 0, { tag:'URGENT', title:'Get a clean knife', duration:'1 min', minutes:1, copy:'Stop cutting. Put the current knife down safely. Wash your hands, then get a clean knife and a clean cutting board. Keep the knife and board that touched raw food separate until they have been washed with hot, soapy water.', cue:'A clean knife and clean cutting board are ready, and the used tools are safely separated.' });
+    advanceTask();
+    showWarning('Use a clean knife', 'I paused the plan so you can change tools safely before continuing.', true);
+    return;
+  }
   const urgent = /burn|smoke|boil over|too hot|stuck/i.test(reason);
   stopTimer();
   if (urgent) {
@@ -312,12 +401,13 @@ async function recalculateInstructions(reason) {
         reason,
         current_task: task,
         next_tasks: tasks.slice(current + 1, current + 6),
+        active_background_timers: backgroundTimers.map((timer) => ({ label: timer.label, remaining_seconds: timer.remaining, priority: timer.priority, overdue: timer.overdue })),
         state: { current_step: current + 1, total_steps: tasks.length, recipe: currentRecipeMeta.title },
       }),
     });
     if (!response.ok) throw new Error('The recovery agent was unavailable.');
     const result = await response.json();
-    const actions = Array.isArray(result.actions) ? result.actions.map((entry) => typeof entry === 'string' ? { task: entry } : entry).filter((entry) => entry && typeof entry === 'object').map((entry) => ({
+    const actions = Array.isArray(result.actions) ? result.actions.map((entry) => typeof entry === 'string' ? { task: entry } : entry).filter((entry) => entry && typeof entry === 'object').map((entry, index) => ({
       tag: entry.tag || 'ADAPTED',
       title: taskTitle(entry),
       duration: entry.duration || '1 min',
@@ -325,6 +415,8 @@ async function recalculateInstructions(reason) {
       ingredients: formatTaskIngredients(entry),
       copy: taskText(entry),
       cue: entry.completion_cue || entry.done_when || 'Tell me when this adapted action is complete.',
+      backgroundTimer: entry.background_timer || entry.backgroundTimer || null,
+      backgroundTimerId: `adapted-${Date.now()}-${index}-${taskTitle(entry)}`,
     })) : [];
     if (actions.length) tasks.splice(current + 1, 0, ...actions);
     task.minutes = Math.max(1, task.minutes || 1) + 1;
@@ -381,7 +473,7 @@ function beginListening() {
 
 function handleVoiceCommand(text) {
   const command = text.replace(/^(hey\s+)?sous[- ]?easy[,:]?\s*/i, '').trim();
-  const directCommand = /\b(repeat|again|pause|stop|resume|continue|ready|done|next|back|previous|not progressing|not done|not ready|still working|taking longer|stuck|missing|wrong|problem|burn|smoke|too hot|boil over|what(?:'s| is) next|how long|what do i do)\b/i.test(command);
+  const directCommand = /\b(repeat|again|pause|stop|resume|continue|ready|done|next|back|previous|not progressing|not done|not ready|still working|still cooking|taking longer|takes longer|more time|need another|different knife|clean knife|stuck|missing|wrong|problem|burn|smoke|too hot|boil over|overdue|what(?:'s| is) next|how long|what do i do)\b/i.test(command);
   if (!directCommand) return;
   if (/repeat|again|say that/i.test(command)) { renderTask(true); return; }
   if (/pause|stop/i.test(command)) { pauseCooking(); return; }
@@ -393,7 +485,7 @@ function handleVoiceCommand(text) {
     return;
   }
   if (/how long/i.test(command)) { speak(`This action takes about ${tasks[current]?.duration || 'a moment'}.`, false); return; }
-  if (/not progressing|not done|not ready|still working|taking longer|stuck|missing|wrong|problem|burn|smoke|too hot|boil over/i.test(command)) { recalculateInstructions(command); return; }
+  if (/not progressing|not done|not ready|still working|still cooking|taking longer|takes longer|more time|need another|different knife|clean knife|stuck|missing|wrong|problem|burn|smoke|too hot|boil over|overdue/i.test(command)) { recalculateInstructions(command); return; }
   if (/ready|done|next/i.test(command)) { advanceTask(); }
 }
 
@@ -401,19 +493,25 @@ async function requestWakeLock() { if (!('wakeLock' in navigator)) { showToast('
 
 function stopListening() { if (recognition) { recognition.onend = null; recognition.stop(); recognition = null; } listening = false; }
 
+function clearBackgroundTimers() {
+  backgroundTimers = [];
+  if (backgroundTimerHandle) { window.clearInterval(backgroundTimerHandle); backgroundTimerHandle = null; }
+  renderBackgroundTimers();
+}
+
 function startCooking() { if (!tasks.length) { showToast('Import a recipe before starting.'); return; } cookingActive = true; $('dashboard').hidden = true; $('setup-panel').hidden = true; $('cook-mode').hidden = false; $('done-button').innerHTML = 'I’m done <span>→</span>'; current = 0; renderTask(true); requestWakeLock(); beginListening(); window.scrollTo({top:0, behavior:'smooth'}); }
 
 function goToPreviousTask() { if (current <= 0) { showToast('This is the first action.'); return; } stopTimer(); hideWarning(); current -= 1; renderTask(true); }
 
 function advanceTask() { if (current >= tasks.length - 1) { finishCooking(); return; } stopTimer(); hideWarning(); current += 1; renderTask(true); }
 
-function finishCooking() { markCurrentRecipeCompleted(); cookingActive = false; speak('Dinner is ready. Your recipe is now in Past recipes.'); stopListening(); stopTimer(); if (wakeLock) { wakeLock.release(); wakeLock = null; } showView('home'); $('cook-mode').hidden = true; $('dashboard').hidden = false; showToast('Dinner is ready — recipe saved to Past recipes.'); }
+function finishCooking() { markCurrentRecipeCompleted(); cookingActive = false; speak('Dinner is ready. Your recipe is now in Past recipes.'); stopListening(); stopTimer(); clearBackgroundTimers(); if (wakeLock) { wakeLock.release(); wakeLock = null; } showView('home'); $('cook-mode').hidden = true; $('dashboard').hidden = false; showToast('Dinner is ready — recipe saved to Past recipes.'); }
 
-function pauseCooking() { stopTimer(); if (window.speechSynthesis) window.speechSynthesis.pause(); showToast('Cooking paused. Say “resume” when you want to continue.'); }
+function pauseCooking() { stopTimer(); if (backgroundTimerHandle) { window.clearInterval(backgroundTimerHandle); backgroundTimerHandle = null; } if (window.speechSynthesis) window.speechSynthesis.pause(); showToast('Cooking paused. Say “resume” when you want to continue.'); }
 
-function resumeCooking() { if (window.speechSynthesis) window.speechSynthesis.resume(); if (!timerHandle) startTimer(); speak(`Resuming: ${tasks[current]?.title || 'the current action'}.`, false); }
+function resumeCooking() { if (window.speechSynthesis) window.speechSynthesis.resume(); if (!timerHandle) startTimer(); if (backgroundTimers.length && !backgroundTimerHandle) backgroundTimerHandle = window.setInterval(tickBackgroundTimers, 1000); speak(`Resuming: ${tasks[current]?.title || 'the current action'}.`, false); }
 
-function setup() { renderLists(); $('open-setup').addEventListener('click', () => { $('setup-panel').hidden = false; $('setup-panel').scrollIntoView({behavior:'smooth'}); }); $('close-setup').addEventListener('click', () => $('setup-panel').hidden = true); $('start-cooking').addEventListener('click', startCooking); $('back-to-prep').addEventListener('click', () => { $('cook-mode').hidden = true; $('dashboard').hidden = false; stopListening(); stopTimer(); if (wakeLock) wakeLock.release(); }); $('done-button').addEventListener('click', advanceTask); $('repeat-button').addEventListener('click', () => renderTask(true)); $('pause-button').addEventListener('click', pauseCooking); $('speak-button').addEventListener('click', () => renderTask(true)); $('timer-button').addEventListener('click', startTimer); $('dismiss-warning').addEventListener('click', hideWarning); $('issue-button').addEventListener('click', () => { showWarning('Tell me what changed', 'The plan is paused. You can say “the sauce is too thick,” “I’m missing an ingredient,” or tap Resume when ready.'); pauseCooking(); }); $('wake-button').addEventListener('click', requestWakeLock); $('sound-toggle').addEventListener('click', () => { voiceOn = !voiceOn; refreshSoundToggle(); if (!voiceOn) window.speechSynthesis?.cancel(); showToast(voiceOn ? 'Voice instructions on.' : 'Voice instructions muted.'); }); }
+function setup() { renderLists(); $('open-setup').addEventListener('click', () => { $('setup-panel').hidden = false; $('setup-panel').scrollIntoView({behavior:'smooth'}); }); $('close-setup').addEventListener('click', () => $('setup-panel').hidden = true); $('start-cooking').addEventListener('click', startCooking); $('back-to-prep').addEventListener('click', () => { $('cook-mode').hidden = true; $('dashboard').hidden = false; stopListening(); stopTimer(); clearBackgroundTimers(); if (wakeLock) wakeLock.release(); }); $('done-button').addEventListener('click', advanceTask); $('repeat-button').addEventListener('click', () => renderTask(true)); $('pause-button').addEventListener('click', pauseCooking); $('speak-button').addEventListener('click', () => renderTask(true)); $('timer-button').addEventListener('click', startTimer); $('dismiss-warning').addEventListener('click', hideWarning); $('issue-button').addEventListener('click', () => { showWarning('Tell me what changed', 'The plan is paused. You can say “the sauce is too thick,” “I’m missing an ingredient,” or tap Resume when ready.'); pauseCooking(); }); $('wake-button').addEventListener('click', requestWakeLock); $('sound-toggle').addEventListener('click', () => { voiceOn = !voiceOn; refreshSoundToggle(); if (!voiceOn) window.speechSynthesis?.cancel(); showToast(voiceOn ? 'Voice instructions on.' : 'Voice instructions muted.'); }); }
 
 setup();
 
@@ -568,7 +666,8 @@ function renderPastRecipes() {
 function saveNewRecipe(recipe, sourceUrl, plan = null, sourceAsset = null) {
   const isWebSource = /^https?:\/\//i.test(sourceUrl || '');
   const id = sourceAsset?.id || sourceUrl || `${recipe.title}-${Date.now()}`;
-  const saved = { id, title: recipe.title, source: recipe.source || 'Imported recipe', servings: recipe.servings || null, ingredients: [...ingredients], equipment: [...equipment], sourceUrl: isWebSource ? sourceUrl : '', sourceType: sourceAsset?.type || (isWebSource ? 'url' : 'file'), sourceName: sourceAsset?.name || recipe.source || '', sourceAssetId: id, plan };
+  const previous = newRecipes.find((item) => item.id === id);
+  const saved = { id, cloudId: previous?.cloudId || null, title: recipe.title, source: recipe.source || 'Imported recipe', servings: recipe.servings || null, ingredients: [...ingredients], equipment: [...equipment], sourceUrl: isWebSource ? sourceUrl : '', sourceType: sourceAsset?.type || (isWebSource ? 'url' : 'file'), sourceName: sourceAsset?.name || recipe.source || '', sourceAssetId: id, plan };
   newRecipes = [saved, ...newRecipes.filter((item) => item.id !== saved.id)];
   currentRecipeId = id;
   activePastRecipeId = '';
@@ -576,6 +675,100 @@ function saveNewRecipe(recipe, sourceUrl, plan = null, sourceAsset = null) {
   localStorage.setItem('sous-easy-new-recipes', JSON.stringify(newRecipes));
   renderNewRecipes();
   renderShopping();
+  syncRecipeToCloud(saved).catch((error) => console.warn('Recipe could not be synced to Supabase.', error));
+}
+
+function cloudRecipePayload(recipe) {
+  const plan = recipe.plan && typeof recipe.plan === 'object' ? recipe.plan : {};
+  return {
+    author_id: authUser.id,
+    title: recipe.title || 'Imported recipe',
+    source_url: recipe.sourceUrl || null,
+    source_name: recipe.sourceName || recipe.source || 'Imported recipe',
+    ingredients: recipe.ingredients || [],
+    plan: {
+      ...plan,
+      equipment: recipe.equipment || plan.equipment || [],
+      __sousy_meta: {
+        ...(plan.__sousy_meta || {}),
+        local_id: recipe.id,
+        servings: recipe.servings || null,
+        source: recipe.source || 'Imported recipe',
+        source_type: recipe.sourceType || 'file',
+        source_name: recipe.sourceName || recipe.source || 'Imported recipe',
+        source_asset_id: recipe.sourceAssetId || recipe.id,
+        completed_at: recipe.completedAt || null,
+      },
+    },
+  };
+}
+
+async function syncRecipeToCloud(recipe, options = {}) {
+  if (!hasRealAccount() || !recipe) return null;
+  const payload = cloudRecipePayload(recipe);
+  const existingResult = await supabaseClient.from('recipes').select('id,plan').eq('author_id', authUser.id);
+  if (existingResult.error) throw existingResult.error;
+  const existing = (existingResult.data || []).find((row) => row.plan?.__sousy_meta?.local_id === recipe.id) || (recipe.cloudId ? { id: recipe.cloudId } : null);
+  const result = existing
+    ? await supabaseClient.from('recipes').update(payload).eq('id', existing.id).eq('author_id', authUser.id).select('id').single()
+    : await supabaseClient.from('recipes').insert(payload).select('id').single();
+  if (result.error) throw result.error;
+  const cloudId = result.data.id;
+  const updateLocal = (item) => item.id === recipe.id ? { ...item, cloudId } : item;
+  newRecipes = newRecipes.map(updateLocal);
+  pastRecipes = pastRecipes.map(updateLocal);
+  localStorage.setItem('sous-easy-new-recipes', JSON.stringify(newRecipes));
+  localStorage.setItem('sous-easy-past-recipes', JSON.stringify(pastRecipes));
+  return cloudId;
+}
+
+function cloudRowToRecipe(row) {
+  const plan = row.plan && typeof row.plan === 'object' ? row.plan : {};
+  const meta = plan.__sousy_meta || {};
+  return {
+    id: meta.local_id || row.source_url || row.id,
+    cloudId: row.id,
+    title: row.title,
+    source: meta.source || row.source_name || 'Imported recipe',
+    servings: meta.servings || null,
+    ingredients: Array.isArray(row.ingredients) ? row.ingredients : (Array.isArray(plan.ingredients) ? plan.ingredients.map((entry) => formatPlanEntry(entry, 'ingredient')) : []),
+    equipment: Array.isArray(plan.equipment) ? plan.equipment.map((entry) => typeof entry === 'string' ? entry : formatPlanEntry(entry, 'equipment')).filter(Boolean) : [],
+    sourceUrl: row.source_url || '',
+    sourceType: meta.source_type || (row.source_url ? 'url' : 'file'),
+    sourceName: meta.source_name || row.source_name || '',
+    sourceAssetId: meta.source_asset_id || row.id,
+    completedAt: meta.completed_at || null,
+    plan,
+  };
+}
+
+async function loadCloudRecipes() {
+  if (!hasRealAccount()) return;
+  const { data, error } = await supabaseClient.from('recipes').select('id,title,source_url,source_name,ingredients,plan,created_at').eq('author_id', authUser.id).order('created_at', { ascending: false });
+  if (error) {
+    console.warn('Saved recipes could not be loaded from Supabase.', error);
+    showToast('Saved recipes could not sync. Your local recipes are still available.');
+    return;
+  }
+  const cloudRecipes = (data || []).map(cloudRowToRecipe);
+  newRecipes = cloudRecipes.filter((recipe) => !recipe.completedAt);
+  pastRecipes = cloudRecipes.filter((recipe) => Boolean(recipe.completedAt));
+  localStorage.setItem('sous-easy-new-recipes', JSON.stringify(newRecipes));
+  localStorage.setItem('sous-easy-past-recipes', JSON.stringify(pastRecipes));
+  renderNewRecipes();
+  renderPastRecipes();
+  renderShopping();
+}
+
+async function syncLocalRecipesToCloud() {
+  if (!hasRealAccount()) return;
+  const localRecipes = [...newRecipes, ...pastRecipes];
+  let migrationFailed = false;
+  for (const recipe of localRecipes) {
+    try { await syncRecipeToCloud(recipe, { silent: true }); } catch (error) { migrationFailed = true; console.warn('Local recipe migration failed.', error); }
+  }
+  if (migrationFailed) showToast('Some saved recipes could not sync. Check the Supabase recipes table and policies.');
+  else await loadCloudRecipes();
 }
 
 function markCurrentRecipeCompleted() {
@@ -589,6 +782,7 @@ function markCurrentRecipeCompleted() {
   renderNewRecipes();
   renderPastRecipes();
   renderShopping();
+  syncRecipeToCloud(completed).catch((error) => console.warn('Completed recipe could not be synced.', error));
 }
 
 function openRecipeEditor(savedIndex = null) {
@@ -623,6 +817,7 @@ function updateSavedRecipe(recipe) {
   localStorage.setItem('sous-easy-new-recipes', JSON.stringify(newRecipes));
   renderNewRecipes();
   renderShopping();
+  syncRecipeToCloud(recipe).catch((error) => console.warn('Edited recipe could not be synced.', error));
 }
 
 function saveRecipeEditor() {
@@ -817,21 +1012,29 @@ function initializeSecondaryViews() {
     $('setup-panel').hidden = false;
     $('setup-panel').scrollIntoView({ behavior: 'smooth' });
   });
-  document.querySelectorAll('[data-save]').forEach((button) => button.addEventListener('click', () => {
-    const data = { carbonara:['Simple pasta carbonara','Australia’s Best Recipes','🍝'], crumble:['Strawberry oat crumble','Mara’s family notebook','🍓'], greens:['Weeknight greens pasta','adapted from Bon Appétit','🥬'], focaccia:['Rosemary focaccia','Mara’s family notebook','🥖'], 'tomato-soup':['Cozy tomato soup','Noah’s weeknight rotation','🍲'] }[button.dataset.save];
-    saveInspiration(button.dataset.save, ...data);
-    button.textContent = savedInspirations.has(button.dataset.save) ? '♥ Saved' : '♡ Save inspiration';
-  }));
   $('open-post').addEventListener('click', () => { $('post-panel').hidden = false; $('post-panel').scrollIntoView({behavior:'smooth'}); });
   $('close-post').addEventListener('click', () => { $('post-panel').hidden = true; });
   $('publish-post').addEventListener('click', () => {
     const title = $('post-title').value.trim();
-    const source = $('post-source').value.trim() || 'Shared with the Sous-easy community';
+    const source = $('post-source').value.trim();
     if (!title) { showToast('Add a recipe title first.'); $('post-title').focus(); return; }
+    if (!/^https?:\/\//i.test(source)) { showToast('Add a complete recipe link so people can open it.'); $('post-source').focus(); return; }
     const card = document.createElement('article');
-    card.className = 'inspiration-card';
-    card.innerHTML = `<div class="mini-art green-art">✦</div><div><span class="community-tag">YOUR POST</span><h3>${title}</h3><p class="source">Source: ${source}</p><p>${$('post-story').value.trim() || 'A recipe worth passing along.'}</p><button class="text-action" data-save="posted-${Date.now()}">♡ Save inspiration</button></div>`;
+    card.className = 'inspiration-card clickable-inspiration';
+    card.tabIndex = 0;
+    card.setAttribute('role', 'link');
+    card.setAttribute('aria-label', `Open recipe inspiration: ${title}`);
+    card.innerHTML = `<div class="mini-art green-art">✦</div><div><span class="community-tag">YOUR POST</span><h3>${escapeInstructionHtml(title)}</h3><p class="source">${escapeInstructionHtml(source)}</p><p>${escapeInstructionHtml($('post-story').value.trim() || 'A recipe worth passing along.')}</p><div class="inspiration-card-actions"><button class="text-action" data-save="posted-${Date.now()}">♡ Save inspiration</button><span class="open-recipe-hint">Open recipe ↗</span></div></div>`;
+    const openPostedRecipe = (event) => {
+      if (event.target.closest('[data-save]')) return;
+      window.open(source, '_blank', 'noopener,noreferrer');
+    };
+    card.addEventListener('click', openPostedRecipe);
+    card.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); openPostedRecipe(event); }
+    });
     $('inspiration-grid').prepend(card);
+    $('inspiration-empty').hidden = true;
     card.querySelector('[data-save]').addEventListener('click', () => { saveInspiration(card.querySelector('[data-save]').dataset.save, title, source, '✦'); card.querySelector('[data-save]').textContent = '♥ Saved'; });
     $('post-title').value = ''; $('post-source').value = ''; $('post-story').value = ''; $('post-panel').hidden = true; showToast('Your inspiration is now on the community page.');
   });
@@ -1089,6 +1292,12 @@ function clearStoredAnonymousProfile() {
   localStorage.removeItem('sous-easy-guest-profile');
   authUser = null;
   authProfile = {};
+  if ($('friend-list')) $('friend-list').innerHTML = '<p class="feed-note">Sign in to search for real Sous-easy cooks.</p>';
+  if ($('following-list')) $('following-list').innerHTML = '<p class="feed-note">Sign in to see cooks you follow.</p>';
+  if ($('followers-list')) $('followers-list').innerHTML = '<p class="feed-note">Sign in to see your followers.</p>';
+  if ($('following-count')) $('following-count').textContent = '0';
+  if ($('followers-count')) $('followers-count').textContent = '0';
+  if ($('friend-count')) $('friend-count').textContent = '0 following';
   showAuthScreen();
 }
 
@@ -1107,9 +1316,11 @@ async function loadAuthenticatedProfile(user) {
   setProfile(displayName, `@${username.replace(/^@/, '')}`);
   if (data?.avatar_url) applyProfilePhoto(data.avatar_url);
   populateProfileForm(data || {}, user);
+  $('friend-list').innerHTML = '<p class="feed-note">Search by username to find real Sous-easy cooks.</p>';
   hideAuthScreen();
   showOnboardingScreen(user);
   await loadFollowLists();
+  await syncLocalRecipesToCloud();
 }
 
 function renderRealFriendRows(profiles, followingIds = new Set()) {
@@ -1197,7 +1408,8 @@ async function loadFriendRequests() {
   }
   const profileMap = new Map(profiles.map((profile) => [profile.id, profile]));
   container.innerHTML = requests?.length ? requests.map((request) => {
-    const profile = profileMap.get(request.sender_id) || { username: 'cook', display_name: 'Sous-easy cook' };
+    const profile = profileMap.get(request.sender_id);
+    if (!profile) return '';
     return `<div class="request-row"><div class="friend-avatar">${escapeInstructionHtml(profile.display_name.charAt(0).toUpperCase())}</div><div class="friend-info"><strong>${escapeInstructionHtml(profile.display_name)}</strong><p>@${escapeInstructionHtml(profile.username)} wants to follow you</p></div><button class="accept-button" data-accept-request="${request.id}">Accept</button></div>`;
   }).join('') : '<p class="feed-note">No pending friend requests.</p>';
   container.querySelectorAll('[data-accept-request]').forEach((button) => button.addEventListener('click', () => acceptFriendRequest(button.dataset.acceptRequest, button)));
@@ -1241,22 +1453,11 @@ function initializeSocialInteractions() {
     $('friends-recipes').hidden = tab.dataset.recipeTab !== 'friends';
   }));
 
-  document.querySelectorAll('[data-follow]').forEach((button) => button.addEventListener('click', () => {
-    if (hasRealAccount()) { toggleRealFollow(button.dataset.follow, button, !button.classList.contains('following')); return; }
-    const isFollowing = button.classList.toggle('following');
-    button.textContent = isFollowing ? 'Following' : 'Follow';
-    const count = Number(($('friend-count').textContent.match(/\d+/) || ['0'])[0]) + (isFollowing ? 1 : -1);
-    $('friend-count').textContent = `${count} following`;
-    showToast(isFollowing ? 'Following this cook.' : 'Unfollowed.');
-  }));
   document.querySelectorAll('[data-accept]').forEach((button) => button.addEventListener('click', () => { button.classList.add('accepted'); button.textContent = 'Accepted'; showToast('Friend request accepted.'); }));
   $('find-friend-button').addEventListener('click', async () => {
     const query = $('friend-search-input').value.trim().toLowerCase();
-    if (hasRealAccount()) { await searchRealFriends(query); return; }
-    const rows = [...document.querySelectorAll('#friend-list .friend-row')];
-    let matches = 0;
-    rows.forEach((row) => { const visible = !query || row.textContent.toLowerCase().includes(query); row.hidden = !visible; if (visible) matches += 1; });
-    showToast(matches ? `${matches} cook${matches === 1 ? '' : 's'} found.` : 'No cooks found yet. Try another username.');
+    if (!hasRealAccount()) { showToast('Sign in to find and follow real cooks.'); showAuthScreen(); return; }
+    await searchRealFriends(query);
   });
   $('friend-search-input').addEventListener('keydown', (event) => { if (event.key === 'Enter') $('find-friend-button').click(); });
 
@@ -1540,7 +1741,7 @@ function applyImportedRecipe(payload, sourceUrl, sourceAsset = null, options = {
 
   ingredients = (plan.ingredients || []).map((entry) => formatPlanEntry(entry, 'ingredient')).filter(Boolean);
   equipment = (plan.equipment || []).map((entry) => formatPlanEntry(entry, 'equipment')).filter(Boolean);
-  const plannedTasks = expandPlanEntries(plan.tasks).map((entry) => ({ tag:entry.stage || entry.tag || 'COOK', title:taskTitle(entry), duration:entry.duration || '1 min', minutes:parseDurationMinutes(entry.duration), ingredients:formatTaskIngredients(entry), copy:taskText(entry), cue:entry.completion_cue || entry.when_done || 'Tell me when this step is complete.' }));
+  const plannedTasks = expandPlanEntries(plan.tasks).map((entry, index) => ({ tag:entry.stage || entry.tag || 'COOK', title:taskTitle(entry), duration:entry.duration || '1 min', minutes:parseDurationMinutes(entry.duration), ingredients:formatTaskIngredients(entry), copy:taskText(entry), cue:entry.completion_cue || entry.when_done || 'Tell me when this step is complete.', backgroundTimer: entry.background_timer || entry.backgroundTimer || null, backgroundTimerId: `plan-${index}-${taskTitle(entry)}` }));
   const cleanupEntries = expandPlanEntries(plan.cleanup);
   const cleanupTasks = cleanupEntries.length ? [{
     tag: 'CLEAN UP',
