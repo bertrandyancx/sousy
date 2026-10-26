@@ -1203,9 +1203,14 @@ function hideAuthScreen() { $('auth-screen').hidden = true; }
 
 function openLocalDemo() {
   authUser = null;
-  setProfile('Local demo cook', '@localdemo');
+  const existingGuest = JSON.parse(localStorage.getItem('sous-easy-guest-profile') || 'null');
+  const guestNumber = existingGuest?.number || Math.floor(10000 + Math.random() * 90000);
+  const guestProfile = existingGuest || { number: guestNumber, name: `User${guestNumber}`, username: `guest${guestNumber}` };
+  authProfile = guestProfile;
+  localStorage.setItem('sous-easy-guest-profile', JSON.stringify(guestProfile));
+  setProfile(guestProfile.name, `@${guestProfile.username}`);
   hideAuthScreen();
-  showToast('Local demo mode is on. Add Supabase keys for real accounts.');
+  showToast(`Welcome, ${guestProfile.name}. Guest mode is on.`);
 }
 
 function showAuthStatus(message) {
