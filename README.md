@@ -46,7 +46,7 @@ The `/api/metrics` endpoint reports real run and token counts without exposing s
 
 The browser uses Speech Synthesis and Speech Recognition. If microphone permission is unavailable, the app switches to manual completion. Wake Lock is requested during guided cooking when supported. Urgent heat and smoke reports trigger a deterministic safety action before any recovery-agent response.
 
-Recipe source text is treated as untrusted data. The planning prompts explicitly reject embedded role changes, secret requests, and tool instructions. The model can propose a plan, but the application owns timers, dependencies, safety overrides, and the final next action.
+Recipe source text is treated as untrusted data. The application rejects common embedded role changes, secret requests, and tool instructions before planning, and the prompts repeat that boundary. The model can propose a plan, but the application owns timers, dependencies, safety overrides, and the final next action.
 
 ## Deployment on Render
 
