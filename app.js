@@ -62,6 +62,7 @@ let importRequestId = 0;
 let importController = null;
 let supabaseClient = null;
 let authUser = null;
+let authProfile = {};
 let authScreenMode = 'signin';
 let profileDraftPhoto = '';
 let onboardingShownThisSession = false;
@@ -923,27 +924,42 @@ async function saveProfileChanges() {
   const status = $('profile-save-status');
   button.disabled = true;
   button.textContent = 'Saving…';
+  const profileFields = {
+    display_name: displayName,
+    username,
+    bio: $('profile-bio').value.trim(),
+    location: $('profile-location').value.trim(),
+    cooking_style: $('profile-cooking-style').value,
+    avatar_url: profileDraftPhoto || null,
+  };
   try {
-    const { data, error } = await supabaseClient.from('profiles').update({
-      display_name: displayName,
-      username,
-      bio: $('profile-bio').value.trim(),
-      location: $('profile-location').value.trim(),
-      cooking_style: $('profile-cooking-style').value,
-      avatar_url: profileDraftPhoto || null,
-    }).eq('id', authUser.id).select('username,display_name,avatar_url,bio,location,cooking_style').single();
+    const columns = 'username,display_name,avatar_url,bio,location,cooking_style';
+    let { data, error } = await supabaseClient.from('profiles').update(profileFields).eq('id', authUser.id).select(columns).maybeSingle();
     if (error) throw error;
+    if (!data) {
+      const inserted = await supabaseClient.from('profiles').insert({ id: authUser.id, ...profileFields }).select(columns).single();
+      data = inserted.data;
+      if (inserted.error) throw inserted.error;
+    }
+    authProfile = data;
     setProfile(data.display_name, `@${data.username}`);
     if (data.avatar_url) applyProfilePhoto(data.avatar_url);
     status.textContent = 'Profile saved.';
     showToast('Your profile is up to date.');
   } catch (error) {
-    status.textContent = error.message || 'Profile could not be saved.';
-    showToast('Profile could not be saved.');
+    const message = friendlyProfileError(error);
+    status.textContent = message;
+    showToast(message);
   } finally {
     button.disabled = false;
     button.innerHTML = 'Save profile <span>→</span>';
   }
+}
+
+function friendlyProfileError(error) {
+  if (error?.code === '23505' || /duplicate|already exists|unique/i.test(error?.message || '')) return 'That username is already taken.';
+  if (error?.code === '42501' || /row-level security|permission denied|not allowed/i.test(error?.message || '')) return 'Supabase is blocking profile edits. Add an update/insert policy for your own profile row.';
+  return error?.message || 'Profile could not be saved. Try again.';
 }
 
 function initializeProfileEditor() {
@@ -1072,6 +1088,7 @@ function clearStoredAnonymousProfile() {
   localStorage.removeItem('sous-easy-profile');
   localStorage.removeItem('sous-easy-guest-profile');
   authUser = null;
+  authProfile = {};
   showAuthScreen();
 }
 
@@ -1083,6 +1100,7 @@ function friendlyAuthError(error) {
 async function loadAuthenticatedProfile(user) {
   authUser = user;
   const { data } = await supabaseClient.from('profiles').select('username,display_name,avatar_url,bio,location,cooking_style').eq('id', user.id).maybeSingle();
+  authProfile = data || {};
   const metadata = user.user_metadata || {};
   const displayName = data?.display_name || metadata.display_name || metadata.full_name || user.email?.split('@')[0] || 'Sous-easy cook';
   const username = data?.username || metadata.username || `cook_${user.id.slice(0, 8)}`;
@@ -1298,7 +1316,7 @@ function initializeProfileMenu() {
     $('profile-button').setAttribute('aria-expanded', 'false');
     if (action === 'settings') { showView('settings'); $('account-panel').hidden = false; $('account-panel').scrollIntoView({ behavior: 'smooth', block: 'start' }); }
     else if (action === 'saved' || action === 'friends') showView(action);
-    else if (action === 'profile') { showView('profile'); populateProfileForm({}, authUser); }
+    else if (action === 'profile') { showView('profile'); populateProfileForm(authProfile, authUser); }
     else if (action === 'help') showView('help');
     else if (action === 'signout') {
       if (supabaseClient) {
