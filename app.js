@@ -767,7 +767,7 @@ async function syncLocalRecipesToCloud() {
   for (const recipe of localRecipes) {
     try { await syncRecipeToCloud(recipe, { silent: true }); } catch (error) { migrationFailed = true; console.warn('Local recipe migration failed.', error); }
   }
-  if (migrationFailed) showToast('Some saved recipes could not sync. Check the Supabase recipes table and policies.');
+  if (migrationFailed) showToast('Saved recipes need the Supabase recipe-sync table and policies.');
   else await loadCloudRecipes();
 }
 
