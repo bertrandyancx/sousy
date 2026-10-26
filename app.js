@@ -292,7 +292,7 @@ function handleOverdueStep() {
   showWarning(urgent ? 'Priority adjustment' : 'Plan adjusted', message, urgent);
 }
 
-function recalculateInstructions(reason) {
+async function recalculateInstructions(reason) {
   const task = tasks[current];
   const urgent = /burn|smoke|boil over|too hot|stuck/i.test(reason);
   stopTimer();
@@ -301,6 +301,38 @@ function recalculateInstructions(reason) {
     advanceTask();
     showWarning('Recalculated for safety', 'I moved heat control to the front of the plan. Tell me when the cookware is safe.', true);
     return;
+  }
+  showWarning('Recalculating the plan', 'The kitchen expeditor is checking the next actions.', false);
+  try {
+    const response = await fetch('/api/adapt', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        reason,
+        current_task: task,
+        next_tasks: tasks.slice(current + 1, current + 6),
+        state: { current_step: current + 1, total_steps: tasks.length, recipe: currentRecipeMeta.title },
+      }),
+    });
+    if (!response.ok) throw new Error('The recovery agent was unavailable.');
+    const result = await response.json();
+    const actions = Array.isArray(result.actions) ? result.actions.map((entry) => typeof entry === 'string' ? { task: entry } : entry).filter((entry) => entry && typeof entry === 'object').map((entry) => ({
+      tag: entry.tag || 'ADAPTED',
+      title: taskTitle(entry),
+      duration: entry.duration || '1 min',
+      minutes: parseDurationMinutes(entry.duration),
+      ingredients: formatTaskIngredients(entry),
+      copy: taskText(entry),
+      cue: entry.completion_cue || entry.done_when || 'Tell me when this adapted action is complete.',
+    })) : [];
+    if (actions.length) tasks.splice(current + 1, 0, ...actions);
+    task.minutes = Math.max(1, task.minutes || 1) + 1;
+    task.cue = 'Take the extra time you need. Say “done” only when this action is actually complete.';
+    renderTask(true);
+    showWarning(result.priority === 'urgent' ? 'Priority adjusted' : 'Plan recalculated', result.safety_banner || `I adjusted the next ${actions.length || 1} action${actions.length === 1 ? '' : 's'}.`, result.priority === 'urgent');
+    return;
+  } catch (error) {
+    // The deterministic fallback keeps the cook moving if the recovery call fails.
   }
   task.minutes = Math.max(1, task.minutes || 1) + 1;
   task.cue = 'Take the extra time you need. Say “done” only when this action is actually complete.';
@@ -950,6 +982,13 @@ function showAuthScreen() {
 
 function hideAuthScreen() { $('auth-screen').hidden = true; }
 
+function openLocalDemo() {
+  authUser = null;
+  setProfile('Local demo cook', '@localdemo');
+  hideAuthScreen();
+  showToast('Local demo mode is on. Add Supabase keys for real accounts.');
+}
+
 function showAuthStatus(message) {
   const status = $('auth-status');
   if (status) status.textContent = message || '';
@@ -1003,6 +1042,7 @@ function initializeAuthScreen() {
   document.querySelectorAll('[data-auth-mode]').forEach((tab) => tab.addEventListener('click', () => setAuthScreenMode(tab.dataset.authMode)));
   $('auth-submit').addEventListener('click', submitAuthScreen);
   $('auth-password').addEventListener('keydown', (event) => { if (event.key === 'Enter') submitAuthScreen(); });
+  $('auth-demo').addEventListener('click', openLocalDemo);
   $('auth-google').addEventListener('click', async () => {
     const button = $('auth-google');
     if (!supabaseClient) { showAuthStatus('Google sign-in is not connected on this deployment yet. Add the Supabase environment variables in Render.'); return; }
@@ -1160,6 +1200,7 @@ async function initializeSupabase() {
     const config = await response.json();
     if (!config.supabase_url || !config.supabase_anon_key) {
       showAuthStatus('Google and email sign-in need SUPABASE_URL and SUPABASE_ANON_KEY in the Render service environment.');
+      $('auth-demo').hidden = false;
       return;
     }
     supabaseClient = window.supabase.createClient(config.supabase_url, config.supabase_anon_key);

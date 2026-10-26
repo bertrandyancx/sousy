@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Sous-easy — Final Project Report</title>
+<style>
+:root{--ink:#26382f;--muted:#66756b;--sage:#658572;--berry:#b95c65;--cream:#f7f1e7;--paper:#fffaf2;--line:#ddd4c5;--blue:#2672b7}*{box-sizing:border-box}body{margin:0;background:#e9e4d9;color:var(--ink);font:15px/1.55 Arial,sans-serif}.page{width:8.5in;min-height:11in;margin:22px auto;padding:.72in .8in;background:var(--paper);box-shadow:0 5px 25px #0001;page-break-after:always}h1,h2,h3{font-family:Georgia,serif;line-height:1.12}h1{font-size:39px;margin:0 0 14px}h2{font-size:28px;border-bottom:2px solid var(--line);padding-bottom:9px;margin:0 0 18px}h3{font-size:20px;margin:22px 0 7px;color:var(--sage)}p{margin:8px 0}a{color:var(--sage);font-weight:700}.eyebrow{color:var(--berry);font-size:11px;font-weight:700;letter-spacing:2px}.lede{font-size:20px;color:var(--muted)}.meta{border-left:4px solid var(--berry);padding:10px 15px;background:#f6e5df;margin:24px 0}.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}.stat{background:#e8f0e8;border-radius:12px;padding:13px}.stat strong{display:block;font:26px Georgia,serif;color:var(--sage)}.stat span{font-size:12px;color:var(--muted)}table{border-collapse:collapse;width:100%;font-size:12px;margin:12px 0}th,td{border:1px solid var(--line);padding:8px;vertical-align:top;text-align:left}th{background:#e8f0e8;color:var(--sage)}code,pre{font-family:ui-monospace,monospace;font-size:11px}pre{white-space:pre-wrap;background:#23332c;color:#f8f2e8;border-radius:10px;padding:14px}.callout{border-left:4px solid var(--blue);background:#e8f1f8;padding:11px 14px;margin:14px 0}.warning{border-left-color:var(--berry);background:#fae9e5}.diagram{padding:12px;background:#f1f5ef;border:1px solid #cad9cc;border-radius:14px;text-align:center}.diagram svg{width:100%;height:auto}.screen{border:8px solid #29352f;border-radius:18px;background:var(--cream);padding:15px;max-width:390px;margin:16px auto}.screen .bar{display:flex;justify-content:space-between;font-weight:bold}.screen .hero{background:#e4c59c;border-radius:15px;padding:20px;margin:15px 0}.screen .hero b{display:block;font:25px Georgia,serif}.screen .step{background:#fffaf2;border-radius:14px;padding:14px}.screen .step strong{color:var(--berry)}.screen .use{border-left:3px solid #d58f68;background:#fff4e4;padding:8px;margin:10px 0;font-size:12px}.small,.footer{font-size:12px;color:var(--muted)}@media print{body{background:#fff}.page{margin:0;box-shadow:none}}@media(max-width:850px){.page{width:auto;min-height:auto;margin:0;padding:32px 22px}.grid{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<section class="page">
+<p class="eyebrow">MGT 409 · FINAL PROJECT</p>
+<h1>Sous-easy</h1><p class="lede">Good cooking, no thinking. It’s Sous-easy.</p>
+<div class="meta"><strong>Bertrand Yancx</strong><br>AI kitchen companion · October 2026<br><a href="https://sous-easy.onrender.com">Live app</a> · <a href="https://github.com/bertrandyancx/sousy">GitHub repository</a></div>
+<h2>Executive summary</h2>
+<p>Sous-easy is a voice-first kitchen expeditor for newer cooks. A cook supplies a recipe URL, PDF, or image. Sous-easy extracts the source recipe, delegates sauce/protein/starch work to specialist agents, audits safety, and schedules one exact next action at a time. The cook can respond by voice or tap, and a recovery agent adapts the plan when something changes.</p>
+<div class="grid"><div class="stat"><strong>6</strong><span>planning-agent calls in measured run</span></div><div class="stat"><strong>3</strong><span>parallel cooking components</span></div><div class="stat"><strong>1</strong><span>final consolidated cleanup step</span></div></div>
+<p class="footer">This report is self-contained. Visuals are inline; no external image files are required.</p>
+</section>
+
+<section class="page">
+<p class="eyebrow">1 · TITLE + LINKS</p><h2>Project overview</h2>
+<p><strong>Project:</strong> Sous-easy — a multi-agent, voice-led cooking companion.</p>
+<p><strong>One sentence:</strong> Sous-easy coordinates the independent parts of a recipe, turns them into safe timed instructions, and keeps a beginner moving without requiring them to hold the whole plan in their head.</p>
+<p><strong>Repository:</strong> <a href="https://github.com/bertrandyancx/sousy">github.com/bertrandyancx/sousy</a></p>
+<p><strong>Deployed app:</strong> <a href="https://sous-easy.onrender.com">sous-easy.onrender.com</a></p>
+<h3>What the user experiences</h3>
+<ol><li>Sign in and upload a URL, PDF, or photo.</li><li>Review ingredients, equipment, the high-level plan, and action count.</li><li>Start a guided cook with exact amounts, equipment, temperatures, timers, and voice.</li><li>Say something is wrong or tap a button; Sous-easy recalculates the next action.</li><li>Finish and find the recipe in Saved → Past recipes.</li></ol>
+<div class="screen"><div class="bar"><span>✿ Sous-easy</span><span>🔊 B</span></div><div class="hero"><b>Good cooking,<br><i>no thinking.</i></b><strong>It’s Sous-easy.</strong></div><div class="step"><strong>STEP 04 / 20</strong><h3>Mix the sauce</h3><div class="use"><b>Use exactly</b><br>1 tablespoon soy sauce<br>2 tablespoons water<br>1 teaspoon honey</div><p>Stir the sauce in the bowl until the honey blends into the liquid.</p></div></div>
+</section>
+
+<section class="page">
+<p class="eyebrow">2 · MOTIVATION</p><h2>The problem</h2>
+<p>Cooking instructions assume that a cook can continuously track which ingredient is next, which pan is hot, when to turn something down, how long the current action has taken, and which tools have touched raw food. That mental overhead is especially difficult for newer cooks or anyone coordinating multiple components.</p>
+<p>Existing recipes are useful reference documents but poor real-time copilots. They leave the user to translate “make the sauce” into quantities, tools, order, heat, timing, and completion criteria. A missed timer or an over-thick sauce can derail the whole dish.</p>
+<h3>Who benefits</h3><ul><li>New cooks who need explicit, confidence-building instructions.</li><li>Busy home cooks coordinating multiple pans and timers.</li><li>People who want hands-free guidance while their hands are wet or messy.</li><li>Households using unfamiliar equipment or terminology.</li></ul>
+<div class="callout"><strong>Core promise:</strong> the user should be able to listen, perform one action, report a problem, and continue—without mentally managing the entire recipe.</div>
+<h3>Why this matters</h3><p>The outcome is reduced cognitive load, fewer avoidable timing mistakes, clearer food-safety behavior, and a lower barrier to cooking at home.</p>
+</section>
+
+<section class="page">
+<p class="eyebrow">3 · WHAT IS NEW</p><h2>Positioning and novelty</h2>
+<p>Recipe and meal-planning apps are an overdone project category. Sous-easy’s differentiator is not “AI writes a recipe.” It is a real-time, multi-agent kitchen expeditor that manages simultaneous stations and responds to live kitchen state.</p>
+<table><tr><th>Existing category</th><th>Typical strength</th><th>Sous-easy difference</th></tr><tr><td>Recipe libraries</td><td>Discovery, storage, and social inspiration</td><td>Turns a selected recipe into a running execution plan.</td></tr><tr><td>Guided cooking apps</td><td>Step-by-step recipes</td><td>Coordinates parallel components and adapts when the cook reports a problem.</td></tr><tr><td>General chat assistants</td><td>Flexible conversation</td><td>Uses structured tasks, dependencies, timers, safety vetoes, and one next action.</td></tr><tr><td>Static recipe pages</td><td>Source authority and detail</td><td>Preserves source measurements while translating them into beginner-friendly method steps.</td></tr></table>
+<h3>Novelty claim</h3><p>Sous-easy treats a recipe like a small kitchen operation: independent station agents propose work, safety and timing agents audit it, and an expeditor decides what the cook hears next.</p>
+<div class="callout warning"><strong>Honest boundary:</strong> Sous-easy does not control burners, knives, ovens, or physical appliances. It can advise, warn, time, and adapt; the human remains responsible for physical actions.</div>
+</section>
+
+<section class="page">
+<p class="eyebrow">4 · THE AGENTS</p><h2>Multi-agent design</h2>
+<div class="diagram"><svg viewBox="0 0 700 330" role="img" aria-label="Sous-easy multi-agent architecture"><defs><marker id="arrow" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L0,6 L7,3 z" fill="#658572"/></marker></defs><g font-family="Arial" font-size="14" text-anchor="middle"><rect x="250" y="10" width="200" height="42" rx="10" fill="#e8f0e8" stroke="#658572"/><text x="350" y="36">URL / PDF / image</text><path d="M350 52v30" stroke="#658572" marker-end="url(#arrow)"/><rect x="225" y="82" width="250" height="48" rx="10" fill="#f6e5df" stroke="#b95c65"/><text x="350" y="111">Recipe Reader Agent</text><path d="M350 130v30" stroke="#658572" marker-end="url(#arrow)"/><rect x="25" y="160" width="140" height="50" rx="10" fill="#fffaf2" stroke="#ddd4c5"/><text x="95" y="190">Sauce Agent</text><rect x="190" y="160" width="140" height="50" rx="10" fill="#fffaf2" stroke="#ddd4c5"/><text x="260" y="190">Protein Agent</text><rect x="355" y="160" width="140" height="50" rx="10" fill="#fffaf2" stroke="#ddd4c5"/><text x="425" y="190">Starch Agent</text><rect x="520" y="160" width="140" height="50" rx="10" fill="#fffaf2" stroke="#ddd4c5"/><text x="590" y="190">Garnish Agent</text><path d="M95 210v35h255M260 210v35M425 210v35M590 210v35h-240" fill="none" stroke="#658572" marker-end="url(#arrow)"/><rect x="225" y="245" width="250" height="42" rx="10" fill="#e8f1f8" stroke="#2672b7"/><text x="350" y="271">Safety Auditor → Expeditor</text></g></svg></div>
+<table><tr><th>Agent</th><th>Responsibility</th><th>Tools / output</th></tr><tr><td>Recipe Reader</td><td>Extract trusted recipe facts and component boundaries.</td><td>URL/PDF/image input; normalized JSON.</td></tr><tr><td>Component Agents</td><td>Plan sauce, protein, starch, and garnish independently.</td><td>Exact ingredient quantities, equipment, atomic tasks.</td></tr><tr><td>Safety Auditor</td><td>Find heat, raw-food, allergen, and timing hazards.</td><td>Warnings, vetoes, mitigations.</td></tr><tr><td>Kitchen Expeditor</td><td>Merge plans and dependencies into one schedule.</td><td>Ordered tasks, priorities, feasibility.</td></tr><tr><td>Recovery Agent</td><td>Respond to “too thick,” “burning,” “missing,” or “not progressing.”</td><td>Smallest safe task adjustment.</td></tr></table>
+<p>All agents use <code>gpt-6-luna</code> through Portkey. The application controls the call budget, schema validation, browser timers, and safety overrides.</p>
+</section>
+
+<section class="page">
+<p class="eyebrow">4 · REAL RUN</p><h2>Measured end-to-end run</h2>
+<p>This run was executed locally on October 25, 2026 with a small sesame chicken and rice recipe. It used the actual multi-agent endpoint, not a mocked response.</p>
+<div class="grid"><div class="stat"><strong>7</strong><span>calls including recovery</span></div><div class="stat"><strong>8,785</strong><span>input tokens</span></div><div class="stat"><strong>10,495</strong><span>output tokens</span></div></div>
+<table><tr><th>Agent</th><th>Input</th><th>Cached input</th><th>Output</th></tr><tr><td>Recipe Reader</td><td>295</td><td>0</td><td>1,138</td></tr><tr><td>Sauce Agent</td><td>1,041</td><td>0</td><td>513</td></tr><tr><td>Rice Agent</td><td>1,038</td><td>0</td><td>1,044</td></tr><tr><td>Chicken Agent</td><td>1,051</td><td>0</td><td>1,295</td></tr><tr><td>Safety Auditor</td><td>2,384</td><td>0</td><td>1,118</td></tr><tr><td>Kitchen Expeditor</td><td>2,795</td><td>0</td><td>5,140</td></tr><tr><td>Recovery Agent</td><td>181</td><td>0</td><td>247</td></tr><tr><th>Total</th><th>8,785</th><th>0</th><th>10,495</th></tr></table>
+<h3>Representative handoff</h3><pre>[recipe-reader] → components: rice, sauce, chicken
+[component-sauce] → measure soy sauce → add water → add honey → mix
+[component-chicken] → cut → sanitize → heat oil → sear → add garlic
+[safety-auditor] → raw chicken, 74°C target, soy allergen warnings
+[kitchen-expeditor] → 20 tasks + 1 cleanup task
+[recovery-agent] ← “the sauce is too thick” → two corrective actions</pre>
+<p class="small">Exact dollar cost depends on the course’s current gpt-6-luna price. The app exposes token counts at <code>/api/metrics</code>; cost is calculated as input tokens × input price plus output tokens × output price.</p>
+</section>
+
+<section class="page">
+<p class="eyebrow">5 · TOKENOMICS</p><h2>Cost controls and scale model</h2>
+<p>The measured run provides the usage basis for cost calculations rather than an estimate. The pipeline caps one planning run at eight model calls: one reader, up to four component agents, one safety audit, one expeditor, and one recovery call when needed.</p>
+<table><tr><th>Scenario</th><th>Usage assumption</th><th>Cost formula</th></tr><tr><td>One initial plan</td><td>6 calls · 8,604 input · 10,248 output tokens</td><td>(8,604 × input price + 10,248 × output price) / 1,000,000</td></tr><tr><td>One issue recovery</td><td>1 call · 181 input · 247 output</td><td>(181 × input price + 247 × output price) / 1,000,000</td></tr><tr><td>100 users</td><td>100 initial plans plus assumed recovery rate</td><td>100 × per-plan cost + recovery calls</td></tr><tr><td>10,000 users</td><td>10,000 initial plans plus assumed recovery rate</td><td>10,000 × per-plan cost + recovery calls</td></tr></table>
+<h3>Controls</h3><ul><li>Eight-call per-run agent budget.</li><li>12 MB request limit and bounded recipe text.</li><li>12 AI requests per IP per ten-minute window.</li><li>Structured JSON validation before browser execution.</li><li>Browser timers and safety overrides do not require another model call.</li><li>Usage is logged by agent and available through <code>/api/metrics</code>.</li></ul>
+<div class="callout"><strong>Remaining evidence task:</strong> insert the course’s official model prices into the cost table. The token counts above are measured.</div>
+</section>
+
+<section class="page">
+<p class="eyebrow">6 · SAFETY</p><h2>Risks and defenses</h2>
+<table><tr><th>Risk</th><th>Defense</th><th>Evidence</th></tr><tr><td>Recipe-source prompt injection</td><td>Source text is untrusted data; agents ignore role changes, secret requests, and tool instructions.</td><td>Bounded extraction pipeline and agent prompts.</td></tr><tr><td>Malformed plan</td><td>JSON parsing and task validation happen before browser execution.</td><td><code>validate_plan_shape</code>.</td></tr><tr><td>Unsafe heat or smoke</td><td>Urgent reports trigger a deterministic heat-off action before recovery planning.</td><td>Voice command and timer-overdue paths.</td></tr><tr><td>Raw-food contamination</td><td>Safety Auditor emits warnings and sanitation tasks.</td><td>Measured chicken run included raw-contact warnings.</td></tr><tr><td>Overspending or loops</td><td>Call budget, input cap, rate limit, timeout, and usage logging.</td><td>Six-call measured plan; seventh recovery call.</td></tr><tr><td>Physical overreach</td><td>The model proposes instructions only; it cannot control appliances.</td><td>Deterministic browser scheduler boundary.</td></tr></table>
+<h3>Safety test</h3><p>The recovery endpoint was tested with “the sauce is too thick.” It returned two corrective actions and a food-temperature warning. A smoke or burning report takes the deterministic urgent branch instead of waiting for the recovery model.</p>
+<div class="callout warning"><strong>Limitation:</strong> this is cooking guidance, not professional food-safety certification. The app escalates uncertainty and keeps the user responsible for checking food, appliances, allergies, and local conditions.</div>
+</section>
+
+<section class="page">
+<p class="eyebrow">7 · IMPACT + METRICS</p><h2>How impact will be measured</h2>
+<p>The technical run proves that the pipeline can produce a detailed plan and recover from a report. It does not yet prove that a real person cooks faster or with fewer mistakes. The next measurement is deliberately simple:</p>
+<ol><li>Recruit one newer cook who did not build the app.</li><li>Have them cook one recipe with a normal recipe page, recording interruptions and elapsed time.</li><li>Have them cook a comparable recipe with Sous-easy.</li><li>Measure setup time, clarification questions, missed/late steps, safety corrections, completion rate, and confidence from 1–5.</li><li>Save a short quote and screenshot with permission.</li></ol>
+<table><tr><th>Metric</th><th>Baseline</th><th>Sous-easy</th><th>Evidence source</th></tr><tr><td>Clarification questions</td><td>To measure</td><td>To measure</td><td>Observer count</td></tr><tr><td>Missed/late actions</td><td>To measure</td><td>To measure</td><td>Timer log</td></tr><tr><td>Completion rate</td><td>To measure</td><td>To measure</td><td>Session outcome</td></tr><tr><td>Confidence</td><td>1–5 survey</td><td>1–5 survey</td><td>User response</td></tr></table>
+<div class="callout"><strong>Honest status:</strong> the technical evidence is real; the human impact study still needs one pilot user before submission.</div>
+</section>
+
+<section class="page">
+<p class="eyebrow">8 · LIMITS + NEXT STEPS</p><h2>What is not finished</h2>
+<ul><li>Supabase account data and recipe history are not yet fully synchronized across all saved surfaces.</li><li>The current agent pipeline supports one multi-component dish; multi-dish scheduling is future work.</li><li>The expeditor depends on model output quality, so validation and deterministic safety rules remain essential.</li><li>Model price values need to be inserted from the course’s current pricing information.</li><li>An independent pilot user and before/after metrics are still needed for the strongest impact claim.</li></ul>
+<h3>Next month</h3><ol><li>Persist recipe plans, task state, and cooking history in Supabase.</li><li>Add multi-dish scheduling with shared equipment and burner constraints.</li><li>Add a structured user event log for done, late, problem, and safety interventions.</li><li>Evaluate plans with a fixed recipe test set and compare timing, missing quantities, and unsafe advice.</li><li>Add a user-visible run summary containing agent trace, token usage, and adaptation history.</li></ol>
+<h3>Submission checklist</h3><ul><li>Repository link and live URL included.</li><li><code>README.md</code>, <code>.env.example</code>, and parent-folder env loading included.</li><li><code>report.html</code> and <code>slides.html</code> included in this repository.</li><li>Run <code>python test_luna.py</code> and record the result.</li><li>Capture one real user session and update the impact table.</li><li>Verify the live app on the submission day.</li></ul>
+<p class="footer">Sous-easy · Good cooking, no thinking. It’s Sous-easy.</p>
+</section>
+</body>
+</html>
